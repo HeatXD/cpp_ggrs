@@ -1,0 +1,15 @@
+[package]
+name = "cbinds_ggrs"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+ggrs = "0.9.1"
+interoptopus = "0.14.2"
+interoptopus_backend_c = "0.14.2"
+
+
+[lib]
+name = "cbinds_ggrs"
+crate-type = ["dylib"]

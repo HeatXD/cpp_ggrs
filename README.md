@@ -1,2 +1,2 @@
-# cbinds_ggrs
-c bindings for ggrs
+# cpp_ggrs
+cpp bindings for ggrs

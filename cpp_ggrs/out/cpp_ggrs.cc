@@ -1,161 +1,7 @@
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <type_traits>
-#include <utility>
+#include "rust/cxx.h"
 
 namespace rust {
 inline namespace cxxbridge1 {
-// #include "rust/cxx.h"
-
-struct unsafe_bitcopy_t;
-
-#ifndef CXXBRIDGE1_RUST_STRING
-#define CXXBRIDGE1_RUST_STRING
-class String final {
-public:
-  String() noexcept;
-  String(const String &) noexcept;
-  String(String &&) noexcept;
-  ~String() noexcept;
-
-  String(const std::string &);
-  String(const char *);
-  String(const char *, std::size_t);
-  String(const char16_t *);
-  String(const char16_t *, std::size_t);
-
-  static String lossy(const std::string &) noexcept;
-  static String lossy(const char *) noexcept;
-  static String lossy(const char *, std::size_t) noexcept;
-  static String lossy(const char16_t *) noexcept;
-  static String lossy(const char16_t *, std::size_t) noexcept;
-
-  String &operator=(const String &) &noexcept;
-  String &operator=(String &&) &noexcept;
-
-  explicit operator std::string() const;
-
-  const char *data() const noexcept;
-  std::size_t size() const noexcept;
-  std::size_t length() const noexcept;
-  bool empty() const noexcept;
-
-  const char *c_str() noexcept;
-
-  std::size_t capacity() const noexcept;
-  void reserve(size_t new_cap) noexcept;
-
-  using iterator = char *;
-  iterator begin() noexcept;
-  iterator end() noexcept;
-
-  using const_iterator = const char *;
-  const_iterator begin() const noexcept;
-  const_iterator end() const noexcept;
-  const_iterator cbegin() const noexcept;
-  const_iterator cend() const noexcept;
-
-  bool operator==(const String &) const noexcept;
-  bool operator!=(const String &) const noexcept;
-  bool operator<(const String &) const noexcept;
-  bool operator<=(const String &) const noexcept;
-  bool operator>(const String &) const noexcept;
-  bool operator>=(const String &) const noexcept;
-
-  void swap(String &) noexcept;
-
-  String(unsafe_bitcopy_t, const String &) noexcept;
-
-private:
-  struct lossy_t;
-  String(lossy_t, const char *, std::size_t) noexcept;
-  String(lossy_t, const char16_t *, std::size_t) noexcept;
-  friend void swap(String &lhs, String &rhs) noexcept { lhs.swap(rhs); }
-
-  std::array<std::uintptr_t, 3> repr;
-};
-#endif // CXXBRIDGE1_RUST_STRING
-
-#ifndef CXXBRIDGE1_RUST_OPAQUE
-#define CXXBRIDGE1_RUST_OPAQUE
-class Opaque {
-public:
-  Opaque() = delete;
-  Opaque(const Opaque &) = delete;
-  ~Opaque() = delete;
-};
-#endif // CXXBRIDGE1_RUST_OPAQUE
-
-#ifndef CXXBRIDGE1_IS_COMPLETE
-#define CXXBRIDGE1_IS_COMPLETE
-namespace detail {
-namespace {
-template <typename T, typename = std::size_t>
-struct is_complete : std::false_type {};
-template <typename T>
-struct is_complete<T, decltype(sizeof(T))> : std::true_type {};
-} // namespace
-} // namespace detail
-#endif // CXXBRIDGE1_IS_COMPLETE
-
-#ifndef CXXBRIDGE1_LAYOUT
-#define CXXBRIDGE1_LAYOUT
-class layout {
-  template <typename T>
-  friend std::size_t size_of();
-  template <typename T>
-  friend std::size_t align_of();
-  template <typename T>
-  static typename std::enable_if<std::is_base_of<Opaque, T>::value,
-                                 std::size_t>::type
-  do_size_of() {
-    return T::layout::size();
-  }
-  template <typename T>
-  static typename std::enable_if<!std::is_base_of<Opaque, T>::value,
-                                 std::size_t>::type
-  do_size_of() {
-    return sizeof(T);
-  }
-  template <typename T>
-  static
-      typename std::enable_if<detail::is_complete<T>::value, std::size_t>::type
-      size_of() {
-    return do_size_of<T>();
-  }
-  template <typename T>
-  static typename std::enable_if<std::is_base_of<Opaque, T>::value,
-                                 std::size_t>::type
-  do_align_of() {
-    return T::layout::align();
-  }
-  template <typename T>
-  static typename std::enable_if<!std::is_base_of<Opaque, T>::value,
-                                 std::size_t>::type
-  do_align_of() {
-    return alignof(T);
-  }
-  template <typename T>
-  static
-      typename std::enable_if<detail::is_complete<T>::value, std::size_t>::type
-      align_of() {
-    return do_align_of<T>();
-  }
-};
-
-template <typename T>
-std::size_t size_of() {
-  return layout::size_of<T>();
-}
-
-template <typename T>
-std::size_t align_of() {
-  return layout::align_of<T>();
-}
-#endif // CXXBRIDGE1_LAYOUT
-
 template <typename T>
 union ManuallyDrop {
   T value;
@@ -166,13 +12,33 @@ union ManuallyDrop {
 } // namespace rust
 
 namespace GGRS {
+  struct GGRSSessionInfo;
   struct GGRSPlayer;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
-  struct GGRSSessionInfo;
 }
 
 namespace GGRS {
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
+struct GGRSSessionInfo final {
+  ::GGRS::GGRSSessionType session_type;
+  ::std::uint32_t num_players;
+  ::std::uint32_t fps;
+  ::std::uint32_t input_delay;
+  ::std::uint32_t max_prediction_frames;
+  ::std::uint32_t max_frames_behind;
+  ::std::uint32_t catchup_speed;
+  ::std::uint32_t check_distance;
+  ::std::uint16_t local_port;
+  ::rust::String host;
+  bool sparse_saving;
+  ::rust::Vec<::GGRS::GGRSPlayer> players;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
+
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSPlayer
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSPlayer
 struct GGRSPlayer final {
@@ -203,52 +69,23 @@ enum class GGRSSessionType : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionType
 
-#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
-#define CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
-struct GGRSSessionInfo final : public ::rust::Opaque {
-  ~GGRSSessionInfo() = delete;
-
-private:
-  friend ::rust::layout;
-  struct layout {
-    static ::std::size_t size() noexcept;
-    static ::std::size_t align() noexcept;
-  };
-};
-#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
-
 extern "C" {
-::std::size_t GGRS$cxxbridge1$GGRSSessionInfo$operator$sizeof() noexcept;
-::std::size_t GGRS$cxxbridge1$GGRSSessionInfo$operator$alignof() noexcept;
-
 bool GGRS$cxxbridge1$setup_ggrs_info(::GGRS::GGRSSessionInfo &info) noexcept;
 
 bool GGRS$cxxbridge1$add_player(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSPlayer *player) noexcept;
 
-bool GGRS$cxxbridge1$set_session_type(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSSessionType session_type) noexcept;
+bool GGRS$cxxbridge1$setup_p2p_session(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port, ::std::uint32_t fps, ::std::uint32_t input_delay, ::std::uint32_t max_prediction_frames) noexcept;
 
-bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t players) noexcept;
+bool GGRS$cxxbridge1$setup_spectator_session(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port, ::rust::String *host, ::std::uint32_t max_frames_behind, ::std::uint32_t catchup_speed) noexcept;
 
-bool GGRS$cxxbridge1$set_fps(::GGRS::GGRSSessionInfo &info, ::std::uint32_t fps) noexcept;
+bool GGRS$cxxbridge1$setup_synctest_session(::GGRS::GGRSSessionInfo &info, ::std::uint32_t check_distance, ::std::uint32_t input_delay) noexcept;
 
-bool GGRS$cxxbridge1$set_input_delay(::GGRS::GGRSSessionInfo &info, ::std::uint32_t delay) noexcept;
+bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcept;
 
-bool GGRS$cxxbridge1$set_max_frames_behind(::GGRS::GGRSSessionInfo &info, ::std::uint32_t max_frames_behind) noexcept;
+bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-bool GGRS$cxxbridge1$set_catchup_speed(::GGRS::GGRSSessionInfo &info, ::std::uint32_t catchup_speed) noexcept;
-
-bool GGRS$cxxbridge1$set_check_distance(::GGRS::GGRSSessionInfo &info, ::std::uint32_t check_distance) noexcept;
-
-bool GGRS$cxxbridge1$set_local_port(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port) noexcept;
+::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
-
-::std::size_t GGRSSessionInfo::layout::size() noexcept {
-  return GGRS$cxxbridge1$GGRSSessionInfo$operator$sizeof();
-}
-
-::std::size_t GGRSSessionInfo::layout::align() noexcept {
-  return GGRS$cxxbridge1$GGRSSessionInfo$operator$alignof();
-}
 
 bool setup_ggrs_info(::GGRS::GGRSSessionInfo &info) noexcept {
   return GGRS$cxxbridge1$setup_ggrs_info(info);
@@ -259,35 +96,75 @@ bool add_player(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSPlayer player) noexce
   return GGRS$cxxbridge1$add_player(info, &player$.value);
 }
 
-bool set_session_type(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSSessionType session_type) noexcept {
-  return GGRS$cxxbridge1$set_session_type(info, session_type);
+bool setup_p2p_session(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port, ::std::uint32_t fps, ::std::uint32_t input_delay, ::std::uint32_t max_prediction_frames) noexcept {
+  return GGRS$cxxbridge1$setup_p2p_session(info, local_port, fps, input_delay, max_prediction_frames);
 }
 
-bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t players) noexcept {
-  return GGRS$cxxbridge1$set_num_players(info, players);
+bool setup_spectator_session(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port, ::rust::String host, ::std::uint32_t max_frames_behind, ::std::uint32_t catchup_speed) noexcept {
+  return GGRS$cxxbridge1$setup_spectator_session(info, local_port, &host, max_frames_behind, catchup_speed);
 }
 
-bool set_fps(::GGRS::GGRSSessionInfo &info, ::std::uint32_t fps) noexcept {
-  return GGRS$cxxbridge1$set_fps(info, fps);
+bool setup_synctest_session(::GGRS::GGRSSessionInfo &info, ::std::uint32_t check_distance, ::std::uint32_t input_delay) noexcept {
+  return GGRS$cxxbridge1$setup_synctest_session(info, check_distance, input_delay);
 }
 
-bool set_input_delay(::GGRS::GGRSSessionInfo &info, ::std::uint32_t delay) noexcept {
-  return GGRS$cxxbridge1$set_input_delay(info, delay);
+bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcept {
+  return GGRS$cxxbridge1$set_num_players(info, num);
 }
 
-bool set_max_frames_behind(::GGRS::GGRSSessionInfo &info, ::std::uint32_t max_frames_behind) noexcept {
-  return GGRS$cxxbridge1$set_max_frames_behind(info, max_frames_behind);
+bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
+  return GGRS$cxxbridge1$set_sparse_saving(info, enable);
 }
 
-bool set_catchup_speed(::GGRS::GGRSSessionInfo &info, ::std::uint32_t catchup_speed) noexcept {
-  return GGRS$cxxbridge1$set_catchup_speed(info, catchup_speed);
-}
-
-bool set_check_distance(::GGRS::GGRSSessionInfo &info, ::std::uint32_t check_distance) noexcept {
-  return GGRS$cxxbridge1$set_check_distance(info, check_distance);
-}
-
-bool set_local_port(::GGRS::GGRSSessionInfo &info, ::std::uint16_t local_port) noexcept {
-  return GGRS$cxxbridge1$set_local_port(info, local_port);
+::std::int32_t test_lib(::std::int32_t num) noexcept {
+  return GGRS$cxxbridge1$test_lib(num);
 }
 } // namespace GGRS
+
+extern "C" {
+void cxxbridge1$rust_vec$GGRS$GGRSPlayer$new(const ::rust::Vec<::GGRS::GGRSPlayer> *ptr) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSPlayer$drop(::rust::Vec<::GGRS::GGRSPlayer> *ptr) noexcept;
+::std::size_t cxxbridge1$rust_vec$GGRS$GGRSPlayer$len(const ::rust::Vec<::GGRS::GGRSPlayer> *ptr) noexcept;
+::std::size_t cxxbridge1$rust_vec$GGRS$GGRSPlayer$capacity(const ::rust::Vec<::GGRS::GGRSPlayer> *ptr) noexcept;
+const ::GGRS::GGRSPlayer *cxxbridge1$rust_vec$GGRS$GGRSPlayer$data(const ::rust::Vec<::GGRS::GGRSPlayer> *ptr) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSPlayer$reserve_total(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t new_cap) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSPlayer$set_len(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
+} // extern "C"
+
+namespace rust {
+inline namespace cxxbridge1 {
+template <>
+Vec<::GGRS::GGRSPlayer>::Vec() noexcept {
+  cxxbridge1$rust_vec$GGRS$GGRSPlayer$new(this);
+}
+template <>
+void Vec<::GGRS::GGRSPlayer>::drop() noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$drop(this);
+}
+template <>
+::std::size_t Vec<::GGRS::GGRSPlayer>::size() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$len(this);
+}
+template <>
+::std::size_t Vec<::GGRS::GGRSPlayer>::capacity() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$capacity(this);
+}
+template <>
+const ::GGRS::GGRSPlayer *Vec<::GGRS::GGRSPlayer>::data() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$data(this);
+}
+template <>
+void Vec<::GGRS::GGRSPlayer>::reserve_total(::std::size_t new_cap) noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$reserve_total(this, new_cap);
+}
+template <>
+void Vec<::GGRS::GGRSPlayer>::set_len(::std::size_t len) noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$set_len(this, len);
+}
+template <>
+void Vec<::GGRS::GGRSPlayer>::truncate(::std::size_t len) {
+  return cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(this, len);
+}
+} // namespace cxxbridge1
+} // namespace rust

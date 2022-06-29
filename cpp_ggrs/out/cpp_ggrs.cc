@@ -2,11 +2,31 @@
 
 namespace rust {
 inline namespace cxxbridge1 {
+namespace detail {
+template <typename T, typename = void *>
+struct operator_new {
+  void *operator()(::std::size_t sz) { return ::operator new(sz); }
+};
+
+template <typename T>
+struct operator_new<T, decltype(T::operator new(sizeof(T)))> {
+  void *operator()(::std::size_t sz) { return T::operator new(sz); }
+};
+} // namespace detail
+
 template <typename T>
 union ManuallyDrop {
   T value;
   ManuallyDrop(T &&value) : value(::std::move(value)) {}
   ~ManuallyDrop() {}
+};
+
+template <typename T>
+union MaybeUninit {
+  T value;
+  void *operator new(::std::size_t sz) { return detail::operator_new<T>{}(sz); }
+  MaybeUninit() {}
+  ~MaybeUninit() {}
 };
 
 namespace {
@@ -43,6 +63,7 @@ namespace GGRS {
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
 struct GGRSSessionInfo final {
+  bool session_started;
   ::GGRS::GGRSSessionType session_type;
   ::std::uint32_t num_players;
   ::std::uint32_t fps;
@@ -122,7 +143,7 @@ bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint3
 
 bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info) noexcept;
+::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::rust::Box<::GGRS::GGRSSession> *return$) noexcept;
 
 ::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
@@ -164,11 +185,13 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
   return GGRS$cxxbridge1$set_sparse_saving(info, enable);
 }
 
-void create_session(::GGRS::GGRSSessionInfo &info) {
-  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$create_session(info);
+::rust::Box<::GGRS::GGRSSession> create_session(::GGRS::GGRSSessionInfo &info) {
+  ::rust::MaybeUninit<::rust::Box<::GGRS::GGRSSession>> return$;
+  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$create_session(info, &return$.value);
   if (error$.ptr) {
     throw ::rust::impl<::rust::Error>::error(error$);
   }
+  return ::std::move(return$.value);
 }
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept {
@@ -185,6 +208,10 @@ const ::GGRS::GGRSPlayer *cxxbridge1$rust_vec$GGRS$GGRSPlayer$data(const ::rust:
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$reserve_total(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t new_cap) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$set_len(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
+
+::GGRS::GGRSSession *cxxbridge1$box$GGRS$GGRSSession$alloc() noexcept;
+void cxxbridge1$box$GGRS$GGRSSession$dealloc(::GGRS::GGRSSession *) noexcept;
+void cxxbridge1$box$GGRS$GGRSSession$drop(::rust::Box<::GGRS::GGRSSession> *ptr) noexcept;
 } // extern "C"
 
 namespace rust {
@@ -220,6 +247,18 @@ void Vec<::GGRS::GGRSPlayer>::set_len(::std::size_t len) noexcept {
 template <>
 void Vec<::GGRS::GGRSPlayer>::truncate(::std::size_t len) {
   return cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(this, len);
+}
+template <>
+::GGRS::GGRSSession *Box<::GGRS::GGRSSession>::allocation::alloc() noexcept {
+  return cxxbridge1$box$GGRS$GGRSSession$alloc();
+}
+template <>
+void Box<::GGRS::GGRSSession>::allocation::dealloc(::GGRS::GGRSSession *ptr) noexcept {
+  cxxbridge1$box$GGRS$GGRSSession$dealloc(ptr);
+}
+template <>
+void Box<::GGRS::GGRSSession>::drop() noexcept {
+  cxxbridge1$box$GGRS$GGRSSession$drop(this);
 }
 } // namespace cxxbridge1
 } // namespace rust

@@ -23,10 +23,13 @@ int main() {
   GGRS::set_num_players(info, 2);
   GGRS::set_sparse_saving(info, true);
   GGRS::setup_p2p_session(info, 4545, 60, 2, 7);
-  std::cout << info.local_port << std::endl;
+  // add players
   for (int i = 0; i < 2; i++) {
     std::string res = GGRS::add_player(info, players[i]) == true ? "Ok" : "Err";
     std::cout << res << std::endl;
   }
+  // add spectators (optional)
+  //
+  auto sess = GGRS::create_session(info);
   return 0;
 }

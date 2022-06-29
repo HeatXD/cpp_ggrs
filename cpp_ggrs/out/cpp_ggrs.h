@@ -13,6 +13,7 @@ namespace GGRS {
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSessionInfo
 struct GGRSSessionInfo final {
+  bool session_started;
   ::GGRS::GGRSSessionType session_type;
   ::std::uint32_t num_players;
   ::std::uint32_t fps;
@@ -88,7 +89,7 @@ bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcep
 
 bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-void create_session(::GGRS::GGRSSessionInfo &info);
+::rust::Box<::GGRS::GGRSSession> create_session(::GGRS::GGRSSessionInfo &info);
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

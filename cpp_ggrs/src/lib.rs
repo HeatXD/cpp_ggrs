@@ -1,11 +1,12 @@
 use std::{net::SocketAddr, fmt::{self, Display} };
-use ggrs::{Config, P2PSession, SessionBuilder};
-use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo};
+use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket};
+use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType};
 
 #[cxx::bridge(namespace = "GGRS")]
 mod wrapper {
 
     struct GGRSSessionInfo{
+        session_started: bool,
         session_type: GGRSSessionType,
         num_players: u32,
         fps: u32,
@@ -17,7 +18,7 @@ mod wrapper {
         local_port: u16,
         host: String,
         sparse_saving: bool,
-        players: Vec<GGRSPlayer>,
+        players: Vec<GGRSPlayer>
     }
 
     struct GGRSPlayer{
@@ -51,7 +52,7 @@ mod wrapper {
         fn set_num_players(info: &mut GGRSSessionInfo, num: u32) -> bool;
         fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool;
         // session creation and event handling
-        fn create_session(info: &mut GGRSSessionInfo) -> Result<()>;
+        fn create_session(info: &mut GGRSSessionInfo) -> Result<Box<GGRSSession>>;
         //
         fn test_lib(num: i32) -> i32;
     }
@@ -68,26 +69,23 @@ impl Config for GGRSConfig {
     type Address = SocketAddr; // maybe add a way that people can change their socket type. we'll see later.       
 }
 
-pub struct GGRSSession{
-    started: bool,
-    session: Session
-}
 
 impl Default for GGRSSession{
     fn default() -> Self {
-        Self { started: false, session: Session::NotSet }
+        GGRSSession::NotSet
     }
 }
-pub enum Session {
+pub enum GGRSSession {
     NotSet,
     Peer2Peer(P2PSession<GGRSConfig>),
-    Spectator(P2PSession<GGRSConfig>),
-    Synctest(P2PSession<GGRSConfig>)
+    Spectator(SpectatorSession<GGRSConfig>),
+    Synctest(SyncTestSession<GGRSConfig>)
 }
 
 impl Default for GGRSSessionInfo{
     fn default() -> Self {
         Self { 
+            session_started: false,
             session_type: GGRSSessionType::NotSet,
             num_players: 2, // amount of local and remote players (non-spectator)
             fps: 60, // FPS defines the expected update frequency of this session
@@ -203,20 +201,120 @@ fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool{
     return false;
 }
 
-fn create_session(info: &mut GGRSSessionInfo) -> Result<(), Error>{
-    if info.session_type != GGRSSessionType::NotSet {
-        return Ok(());
+fn create_session(info: &mut GGRSSessionInfo) -> Result<Box<GGRSSession>, Error>{
+    if info.session_type != GGRSSessionType::NotSet && !info.session_started {
+        let mut sess_build = SessionBuilder::<GGRSConfig>::new()
+            .with_num_players(info.num_players as usize)
+            .with_sparse_saving_mode(info.sparse_saving);
+
+        // add players
+        for p in &info.players{
+            match p.player_type {
+                GGRSPlayerType::Local => {
+                    sess_build = match sess_build.add_player(PlayerType::Local, p.player_handle as usize) {
+                        Ok(it) => it,
+                        Err(_) => return Err(Error{msg: "Error adding local player".to_string()}),
+                    };
+                },
+                GGRSPlayerType::Remote => {
+                    let sock: SocketAddr = match p.socket_addr.parse() {
+                        Ok(it) => it,
+                        Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
+                    };
+
+                    sess_build = match sess_build.add_player(PlayerType::Remote(sock), p.player_handle as usize) {
+                        Ok(it) => it,
+                        Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
+                    };
+                },
+                GGRSPlayerType::Spectator => {
+                    let sock: SocketAddr = match p.socket_addr.parse() {
+                        Ok(it) => it,
+                        Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
+                    };
+
+                    sess_build = match sess_build.add_player(PlayerType::Spectator(sock), p.player_handle as usize) {
+                        Ok(it) => it,
+                        Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
+                    };
+                },
+                _ => return Err(Error{msg: "Error unsupported player type".to_string()})
+            }
+        }
+        let session: GGRSSession;
+        // create the session
+        match info.session_type {
+            GGRSSessionType::Peer2Peer => {
+                sess_build = match sess_build.with_fps(info.fps as usize) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: format!("Error invalid value given as fps parameter: {}", info.fps)}),
+                };
+
+                sess_build = sess_build
+                    .with_input_delay(info.input_delay as usize) 
+                    .with_max_prediction_window(info.max_prediction_frames as usize);
+
+                let sock = match UdpNonBlockingSocket::bind_to_port(info.local_port) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: format!("Error Couldnt bind to port: {}", info.local_port)}),
+                };
+
+                session = GGRSSession::Peer2Peer(match sess_build.start_p2p_session(sock) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: "Error couldnt create p2p session".to_string()}),
+                });
+            },
+            GGRSSessionType::Spectator => {
+                sess_build = match sess_build.with_max_frames_behind(info.max_frames_behind as usize) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: "Error invalid value given as max_frames_behind parameter".to_string()}),
+                };
+
+                sess_build = match sess_build.with_catchup_speed(info.catchup_speed as usize) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: "Error invalid value given as catchup_speed parameter".to_string()}),
+                };
+
+                let sock = match UdpNonBlockingSocket::bind_to_port(info.local_port) {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: format!("Error Couldnt bind to port: {}", info.local_port)}),
+                };
+
+                let host_addr: SocketAddr = match info.host.parse() {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: "Error parsing host player address".to_string()}),
+                };
+
+                session = GGRSSession::Spectator(sess_build.start_spectator_session(host_addr, sock));
+            },
+            GGRSSessionType::Synctest => {
+                sess_build = sess_build
+                    .with_check_distance(info.check_distance as usize)
+                    .with_input_delay(info.input_delay as usize);
+
+                session = GGRSSession::Synctest(match sess_build.start_synctest_session() {
+                    Ok(it) => it,
+                    Err(_) => return Err(Error{msg: "Error failed to create synctest session".to_string()}),
+                });
+            },
+            _ => return Err(Error{msg: "Error unsupported session type".to_string()})
+        }
+        info.session_started = true;
+        // return the created session
+        return Ok(Box::new(session));
     }
-    Err(Error)
+    Err(Error{msg: "Error session already started or session type not set".to_string()})
 }
 
 #[derive(Debug)]
-struct Error;
+struct Error{
+    msg: String
+}
 
 impl std::error::Error for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("rust error")
+        f.write_str(format!("Internal rust error msg: {}", self.msg).as_str())
     }
 }

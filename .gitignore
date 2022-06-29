@@ -1,2 +1,4 @@
 cpp_ggrs/target/
 cpp_ggrs/example/bin
+cpp_ggrs/example/*.exe
+cpp_ggrs/example/*.dll

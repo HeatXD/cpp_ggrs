@@ -1,6 +1,5 @@
-use core::num;
-use std::net::SocketAddr;
-use ggrs::Config;
+use std::{net::SocketAddr, fmt::{self, Display} };
+use ggrs::{Config, P2PSession, SessionBuilder};
 use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo};
 
 #[cxx::bridge(namespace = "GGRS")]
@@ -41,7 +40,9 @@ mod wrapper {
     }
 
     extern "Rust" {
-        // i like when my outwards facing functions return something. help with testing
+        type GGRSSession;
+        // I like when my outwards facing functions return something. helps with testing
+        // setup functions and helpers
         fn setup_ggrs_info(info: &mut GGRSSessionInfo) -> bool;
         fn add_player(info: &mut GGRSSessionInfo, player: GGRSPlayer) -> bool;
         fn setup_p2p_session(info: &mut GGRSSessionInfo, local_port: u16, fps: u32, input_delay: u32, max_prediction_frames: u32) -> bool;
@@ -49,6 +50,9 @@ mod wrapper {
         fn setup_synctest_session(info: &mut GGRSSessionInfo, check_distance: u32, input_delay: u32) -> bool;
         fn set_num_players(info: &mut GGRSSessionInfo, num: u32) -> bool;
         fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool;
+        // session creation and event handling
+        fn create_session(info: &mut GGRSSessionInfo) -> Result<()>;
+        //
         fn test_lib(num: i32) -> i32;
     }
 }
@@ -64,6 +68,22 @@ impl Config for GGRSConfig {
     type Address = SocketAddr; // maybe add a way that people can change their socket type. we'll see later.       
 }
 
+pub struct GGRSSession{
+    started: bool,
+    session: Session
+}
+
+impl Default for GGRSSession{
+    fn default() -> Self {
+        Self { started: false, session: Session::NotSet }
+    }
+}
+pub enum Session {
+    NotSet,
+    Peer2Peer(P2PSession<GGRSConfig>),
+    Spectator(P2PSession<GGRSConfig>),
+    Synctest(P2PSession<GGRSConfig>)
+}
 
 impl Default for GGRSSessionInfo{
     fn default() -> Self {
@@ -79,7 +99,7 @@ impl Default for GGRSSessionInfo{
             local_port: 1234,
             sparse_saving: false, // enable encourage a more conservative saving pattern.
             host: String::new(),
-            players: Vec::new()
+            players: Vec::new(),
         }
     }
 } 
@@ -181,4 +201,22 @@ fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool{
         return true;
     }
     return false;
+}
+
+fn create_session(info: &mut GGRSSessionInfo) -> Result<(), Error>{
+    if info.session_type != GGRSSessionType::NotSet {
+        return Ok(());
+    }
+    Err(Error)
+}
+
+#[derive(Debug)]
+struct Error;
+
+impl std::error::Error for Error {}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("rust error")
+    }
 }

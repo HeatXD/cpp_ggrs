@@ -6,6 +6,7 @@ namespace GGRS {
   struct GGRSPlayer;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
+  struct GGRSSession;
 }
 
 namespace GGRS {
@@ -59,6 +60,20 @@ enum class GGRSSessionType : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionType
 
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+struct GGRSSession final : public ::rust::Opaque {
+  ~GGRSSession() = delete;
+
+private:
+  friend ::rust::layout;
+  struct layout {
+    static ::std::size_t size() noexcept;
+    static ::std::size_t align() noexcept;
+  };
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+
 bool setup_ggrs_info(::GGRS::GGRSSessionInfo &info) noexcept;
 
 bool add_player(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSPlayer player) noexcept;
@@ -72,6 +87,8 @@ bool setup_synctest_session(::GGRS::GGRSSessionInfo &info, ::std::uint32_t check
 bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcept;
 
 bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
+
+void create_session(::GGRS::GGRSSessionInfo &info);
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

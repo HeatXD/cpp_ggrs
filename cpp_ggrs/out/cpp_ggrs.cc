@@ -8,6 +8,26 @@ union ManuallyDrop {
   ManuallyDrop(T &&value) : value(::std::move(value)) {}
   ~ManuallyDrop() {}
 };
+
+namespace {
+namespace repr {
+struct PtrLen final {
+  void *ptr;
+  ::std::size_t len;
+};
+} // namespace repr
+
+template <>
+class impl<Error> final {
+public:
+  static Error error(repr::PtrLen repr) noexcept {
+    Error error;
+    error.msg = static_cast<const char *>(repr.ptr);
+    error.len = repr.len;
+    return error;
+  }
+};
+} // namespace
 } // namespace cxxbridge1
 } // namespace rust
 
@@ -16,6 +36,7 @@ namespace GGRS {
   struct GGRSPlayer;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
+  struct GGRSSession;
 }
 
 namespace GGRS {
@@ -69,7 +90,24 @@ enum class GGRSSessionType : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionType
 
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+struct GGRSSession final : public ::rust::Opaque {
+  ~GGRSSession() = delete;
+
+private:
+  friend ::rust::layout;
+  struct layout {
+    static ::std::size_t size() noexcept;
+    static ::std::size_t align() noexcept;
+  };
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSSession
+
 extern "C" {
+::std::size_t GGRS$cxxbridge1$GGRSSession$operator$sizeof() noexcept;
+::std::size_t GGRS$cxxbridge1$GGRSSession$operator$alignof() noexcept;
+
 bool GGRS$cxxbridge1$setup_ggrs_info(::GGRS::GGRSSessionInfo &info) noexcept;
 
 bool GGRS$cxxbridge1$add_player(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSPlayer *player) noexcept;
@@ -84,8 +122,18 @@ bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint3
 
 bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
+::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info) noexcept;
+
 ::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
+
+::std::size_t GGRSSession::layout::size() noexcept {
+  return GGRS$cxxbridge1$GGRSSession$operator$sizeof();
+}
+
+::std::size_t GGRSSession::layout::align() noexcept {
+  return GGRS$cxxbridge1$GGRSSession$operator$alignof();
+}
 
 bool setup_ggrs_info(::GGRS::GGRSSessionInfo &info) noexcept {
   return GGRS$cxxbridge1$setup_ggrs_info(info);
@@ -114,6 +162,13 @@ bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcep
 
 bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
   return GGRS$cxxbridge1$set_sparse_saving(info, enable);
+}
+
+void create_session(::GGRS::GGRSSessionInfo &info) {
+  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$create_session(info);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
 }
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept {

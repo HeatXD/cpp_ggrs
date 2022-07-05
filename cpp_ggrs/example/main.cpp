@@ -1,7 +1,13 @@
 #include "../out/cpp_ggrs.h"
 #include <iostream>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string>
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
 
 int main() {
   GGRS::GGRSSessionInfo info;
@@ -14,7 +20,7 @@ int main() {
       {
           .player_handle = 1,
           .player_type = GGRS::GGRSPlayerType::Remote,
-          .socket_addr = "127.0.0.1:3211",
+          .socket_addr = "127.0.0.1:3111",
       },
   };
   std::cout << GGRS::test_lib(20) << std::endl;
@@ -31,5 +37,11 @@ int main() {
   // add spectators (optional)
   //
   auto sess = GGRS::create_session(info);
+
+  for (int i = 0; i < 1200; i++) {
+    sess = GGRS::poll_remote_clients(sess);
+    Sleep(500);
+  }
+
   return 0;
 }

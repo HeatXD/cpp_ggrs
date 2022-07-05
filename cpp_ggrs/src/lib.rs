@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, fmt::{self, Display} };
 use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket};
-use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType};
+use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState};
 
 #[cxx::bridge(namespace = "GGRS")]
 mod wrapper {
@@ -40,6 +40,11 @@ mod wrapper {
         Synctest,
     }
 
+    enum GGRSSessionState {
+        Okay,
+        Syncing,
+    }
+
     extern "Rust" {
         type GGRSSession;
         // I like when my outwards facing functions return something. helps with testing
@@ -52,14 +57,19 @@ mod wrapper {
         fn set_num_players(info: &mut GGRSSessionInfo, num: u32) -> bool;
         fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool;
         // session creation and event handling
-        fn create_session(info: &mut GGRSSessionInfo) -> Result<Box<GGRSSession>>;
-        //
+        // since boxes don't want to work with cxx i have to use unsafe raw pointers.
+        // looking for better solutions...
+        fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession>;
+        unsafe fn poll_remote_clients(session: *mut GGRSSession) -> *mut GGRSSession;
+        unsafe fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> *mut GGRSSession;
+        unsafe fn get_current_state(session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> *mut GGRSSession;
+        //fn session_advance_frame() -> Vec<GGR>;
         fn test_lib(num: i32) -> i32;
     }
 }
 
 fn test_lib(num: i32) -> i32{
-    num * 5
+    num * 7
 }
 
 pub struct GGRSConfig;
@@ -201,7 +211,7 @@ fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool{
     return false;
 }
 
-fn create_session(info: &mut GGRSSessionInfo) -> Result<Box<GGRSSession>, Error>{
+fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>{
     if info.session_type != GGRSSessionType::NotSet && !info.session_started {
         let mut sess_build = SessionBuilder::<GGRSConfig>::new()
             .with_num_players(info.num_players as usize)
@@ -301,9 +311,31 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<Box<GGRSSession>, Error>
         }
         info.session_started = true;
         // return the created session
-        return Ok(Box::new(session));
+        return Ok(Box::into_raw(Box::new(session)));
     }
     Err(Error{msg: "Error session already started or session type not set".to_string()})
+}
+
+fn poll_remote_clients(session: *mut GGRSSession) -> *mut GGRSSession{
+    let mut sess = unsafe { Box::from_raw(session)};
+    match sess.as_mut() {
+        GGRSSession::NotSet => (),
+        GGRSSession::Peer2Peer( sess) => {sess.poll_remote_clients()},
+        GGRSSession::Spectator( sess) => {sess.poll_remote_clients()},
+        GGRSSession::Synctest(_) => (),
+    }
+    return Box::into_raw(sess);
+}
+
+fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> *mut GGRSSession{
+    let sess = unsafe { Box::from_raw(session)};
+    return Box::into_raw(sess);
+}
+
+fn get_current_state(session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> *mut GGRSSession{
+    let sess = unsafe { Box::from_raw(session)};
+    *out_state = GGRSSessionState::Okay;
+    return Box::into_raw(sess);
 }
 
 #[derive(Debug)]

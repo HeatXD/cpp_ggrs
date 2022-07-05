@@ -6,6 +6,7 @@ namespace GGRS {
   struct GGRSPlayer;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
+  enum class GGRSSessionState : ::std::uint8_t;
   struct GGRSSession;
 }
 
@@ -61,6 +62,14 @@ enum class GGRSSessionType : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionType
 
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+#define CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+enum class GGRSSessionState : ::std::uint8_t {
+  Okay = 0,
+  Syncing = 1,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 struct GGRSSession final : public ::rust::Opaque {
@@ -89,7 +98,13 @@ bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcep
 
 bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-::rust::Box<::GGRS::GGRSSession> create_session(::GGRS::GGRSSessionInfo &info);
+::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info);
+
+::GGRS::GGRSSession *poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+
+::GGRS::GGRSSession *add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+
+::GGRS::GGRSSession *get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

@@ -56,6 +56,7 @@ namespace GGRS {
   struct GGRSPlayer;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
+  enum class GGRSSessionState : ::std::uint8_t;
   struct GGRSSession;
 }
 
@@ -111,6 +112,14 @@ enum class GGRSSessionType : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionType
 
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+#define CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+enum class GGRSSessionState : ::std::uint8_t {
+  Okay = 0,
+  Syncing = 1,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 struct GGRSSession final : public ::rust::Opaque {
@@ -143,7 +152,13 @@ bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint3
 
 bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::rust::Box<::GGRS::GGRSSession> *return$) noexcept;
+::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSSession **return$) noexcept;
+
+::GGRS::GGRSSession *GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+
+::GGRS::GGRSSession *GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+
+::GGRS::GGRSSession *GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
 
 ::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
@@ -185,13 +200,25 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
   return GGRS$cxxbridge1$set_sparse_saving(info, enable);
 }
 
-::rust::Box<::GGRS::GGRSSession> create_session(::GGRS::GGRSSessionInfo &info) {
-  ::rust::MaybeUninit<::rust::Box<::GGRS::GGRSSession>> return$;
+::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info) {
+  ::rust::MaybeUninit<::GGRS::GGRSSession *> return$;
   ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$create_session(info, &return$.value);
   if (error$.ptr) {
     throw ::rust::impl<::rust::Error>::error(error$);
   }
   return ::std::move(return$.value);
+}
+
+::GGRS::GGRSSession *poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
+  return GGRS$cxxbridge1$poll_remote_clients(session);
+}
+
+::GGRS::GGRSSession *add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept {
+  return GGRS$cxxbridge1$add_local_input(session, player_handle, input);
+}
+
+::GGRS::GGRSSession *get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept {
+  return GGRS$cxxbridge1$get_current_state(session, out_state);
 }
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept {
@@ -208,10 +235,6 @@ const ::GGRS::GGRSPlayer *cxxbridge1$rust_vec$GGRS$GGRSPlayer$data(const ::rust:
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$reserve_total(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t new_cap) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$set_len(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
-
-::GGRS::GGRSSession *cxxbridge1$box$GGRS$GGRSSession$alloc() noexcept;
-void cxxbridge1$box$GGRS$GGRSSession$dealloc(::GGRS::GGRSSession *) noexcept;
-void cxxbridge1$box$GGRS$GGRSSession$drop(::rust::Box<::GGRS::GGRSSession> *ptr) noexcept;
 } // extern "C"
 
 namespace rust {
@@ -247,18 +270,6 @@ void Vec<::GGRS::GGRSPlayer>::set_len(::std::size_t len) noexcept {
 template <>
 void Vec<::GGRS::GGRSPlayer>::truncate(::std::size_t len) {
   return cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(this, len);
-}
-template <>
-::GGRS::GGRSSession *Box<::GGRS::GGRSSession>::allocation::alloc() noexcept {
-  return cxxbridge1$box$GGRS$GGRSSession$alloc();
-}
-template <>
-void Box<::GGRS::GGRSSession>::allocation::dealloc(::GGRS::GGRSSession *ptr) noexcept {
-  cxxbridge1$box$GGRS$GGRSSession$dealloc(ptr);
-}
-template <>
-void Box<::GGRS::GGRSSession>::drop() noexcept {
-  cxxbridge1$box$GGRS$GGRSSession$drop(this);
 }
 } // namespace cxxbridge1
 } // namespace rust

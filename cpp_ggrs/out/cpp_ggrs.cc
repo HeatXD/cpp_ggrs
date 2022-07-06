@@ -154,11 +154,11 @@ bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enabl
 
 ::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSSession **return$) noexcept;
 
-::GGRS::GGRSSession *GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+bool GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-::GGRS::GGRSSession *GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+bool GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
 
-::GGRS::GGRSSession *GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
+bool GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
 
 ::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
@@ -209,15 +209,15 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
   return ::std::move(return$.value);
 }
 
-::GGRS::GGRSSession *poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
+bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
   return GGRS$cxxbridge1$poll_remote_clients(session);
 }
 
-::GGRS::GGRSSession *add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept {
+bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept {
   return GGRS$cxxbridge1$add_local_input(session, player_handle, input);
 }
 
-::GGRS::GGRSSession *get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept {
+bool get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept {
   return GGRS$cxxbridge1$get_current_state(session, out_state);
 }
 

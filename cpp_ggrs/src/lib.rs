@@ -60,9 +60,9 @@ mod wrapper {
         // since boxes don't want to work with cxx i have to use unsafe raw pointers.
         // looking for better solutions...
         fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession>;
-        unsafe fn poll_remote_clients(session: *mut GGRSSession) -> *mut GGRSSession;
-        unsafe fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> *mut GGRSSession;
-        unsafe fn get_current_state(session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> *mut GGRSSession;
+        unsafe fn poll_remote_clients(mut session: *mut GGRSSession) -> bool;
+        unsafe fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> bool;
+        unsafe fn get_current_state(mut session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> bool;
         //fn session_advance_frame() -> Vec<GGR>;
         fn test_lib(num: i32) -> i32;
     }
@@ -316,7 +316,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
     Err(Error{msg: "Error session already started or session type not set".to_string()})
 }
 
-fn poll_remote_clients(session: *mut GGRSSession) -> *mut GGRSSession{
+fn poll_remote_clients(mut session: *mut GGRSSession) -> bool{
     let mut sess = unsafe { Box::from_raw(session)};
     match sess.as_mut() {
         GGRSSession::NotSet => (),
@@ -324,18 +324,21 @@ fn poll_remote_clients(session: *mut GGRSSession) -> *mut GGRSSession{
         GGRSSession::Spectator( sess) => {sess.poll_remote_clients()},
         GGRSSession::Synctest(_) => (),
     }
-    return Box::into_raw(sess);
+    session = Box::into_raw(sess);
+    return true;
 }
 
-fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> *mut GGRSSession{
+fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> bool{
     let sess = unsafe { Box::from_raw(session)};
-    return Box::into_raw(sess);
+    session = Box::into_raw(sess);
+    return true;
 }
 
-fn get_current_state(session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> *mut GGRSSession{
+fn get_current_state(mut session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> bool {
     let sess = unsafe { Box::from_raw(session)};
-    *out_state = GGRSSessionState::Okay;
-    return Box::into_raw(sess);
+    *out_state = GGRSSessionState::Syncing;
+    session = Box::into_raw(sess);
+    return true;
 }
 
 #[derive(Debug)]

@@ -100,11 +100,11 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
 ::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info);
 
-::GGRS::GGRSSession *poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-::GGRS::GGRSSession *add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
 
-::GGRS::GGRSSession *get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
+bool get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

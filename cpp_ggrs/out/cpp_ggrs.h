@@ -7,6 +7,9 @@ namespace GGRS {
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
   enum class GGRSSessionState : ::std::uint8_t;
+  enum class GGRSEventType : ::std::uint8_t;
+  struct GGRSEventInfo;
+  struct GGRSEvent;
   struct GGRSSession;
 }
 
@@ -65,10 +68,46 @@ enum class GGRSSessionType : ::std::uint8_t {
 #ifndef CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
 #define CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
 enum class GGRSSessionState : ::std::uint8_t {
-  Okay = 0,
-  Syncing = 1,
+  Running = 0,
+  Synchronizing = 1,
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+#define CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+enum class GGRSEventType : ::std::uint8_t {
+  Empty = 0,
+  Synchronizing = 1,
+  Synchronized = 2,
+  Disconnected = 3,
+  NetworkInterrupted = 4,
+  NetworkResumed = 5,
+  WaitRecommendation = 6,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+struct GGRSEventInfo final {
+  ::rust::String addr;
+  ::std::uint32_t total;
+  ::std::uint32_t count;
+  ::std::uint64_t disconnect_timeout;
+  ::std::uint32_t skip_frames;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
+struct GGRSEvent final {
+  ::GGRS::GGRSEventType event_type;
+  ::GGRS::GGRSEventInfo event_info;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
 
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
@@ -102,9 +141,11 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
 bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input);
 
-bool get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
+::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session) noexcept;
+
+::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session) noexcept;
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

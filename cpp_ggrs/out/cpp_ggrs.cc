@@ -57,6 +57,9 @@ namespace GGRS {
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
   enum class GGRSSessionState : ::std::uint8_t;
+  enum class GGRSEventType : ::std::uint8_t;
+  struct GGRSEventInfo;
+  struct GGRSEvent;
   struct GGRSSession;
 }
 
@@ -115,10 +118,46 @@ enum class GGRSSessionType : ::std::uint8_t {
 #ifndef CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
 #define CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
 enum class GGRSSessionState : ::std::uint8_t {
-  Okay = 0,
-  Syncing = 1,
+  Running = 0,
+  Synchronizing = 1,
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSSessionState
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+#define CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+enum class GGRSEventType : ::std::uint8_t {
+  Empty = 0,
+  Synchronizing = 1,
+  Synchronized = 2,
+  Disconnected = 3,
+  NetworkInterrupted = 4,
+  NetworkResumed = 5,
+  WaitRecommendation = 6,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSEventType
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+struct GGRSEventInfo final {
+  ::rust::String addr;
+  ::std::uint32_t total;
+  ::std::uint32_t count;
+  ::std::uint64_t disconnect_timeout;
+  ::std::uint32_t skip_frames;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSEventInfo
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
+struct GGRSEvent final {
+  ::GGRS::GGRSEventType event_type;
+  ::GGRS::GGRSEventInfo event_info;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
 
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
@@ -156,9 +195,11 @@ bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enabl
 
 bool GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-bool GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
+::rust::repr::PtrLen GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input, bool *return$) noexcept;
 
-bool GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept;
+::GGRS::GGRSSessionState GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session) noexcept;
+
+void GGRS$cxxbridge1$get_events(::GGRS::GGRSSession *session, ::rust::Vec<::GGRS::GGRSEvent> *return$) noexcept;
 
 ::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
 } // extern "C"
@@ -213,12 +254,23 @@ bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
   return GGRS$cxxbridge1$poll_remote_clients(session);
 }
 
-bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept {
-  return GGRS$cxxbridge1$add_local_input(session, player_handle, input);
+bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) {
+  ::rust::MaybeUninit<bool> return$;
+  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$add_local_input(session, player_handle, input, &return$.value);
+  if (error$.ptr) {
+    throw ::rust::impl<::rust::Error>::error(error$);
+  }
+  return ::std::move(return$.value);
 }
 
-bool get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSSessionState &out_state) noexcept {
-  return GGRS$cxxbridge1$get_current_state(session, out_state);
+::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session) noexcept {
+  return GGRS$cxxbridge1$get_current_state(session);
+}
+
+::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session) noexcept {
+  ::rust::MaybeUninit<::rust::Vec<::GGRS::GGRSEvent>> return$;
+  GGRS$cxxbridge1$get_events(session, &return$.value);
+  return ::std::move(return$.value);
 }
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept {
@@ -235,6 +287,15 @@ const ::GGRS::GGRSPlayer *cxxbridge1$rust_vec$GGRS$GGRSPlayer$data(const ::rust:
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$reserve_total(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t new_cap) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$set_len(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
 void cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(::rust::Vec<::GGRS::GGRSPlayer> *ptr, ::std::size_t len) noexcept;
+
+void cxxbridge1$rust_vec$GGRS$GGRSEvent$new(const ::rust::Vec<::GGRS::GGRSEvent> *ptr) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSEvent$drop(::rust::Vec<::GGRS::GGRSEvent> *ptr) noexcept;
+::std::size_t cxxbridge1$rust_vec$GGRS$GGRSEvent$len(const ::rust::Vec<::GGRS::GGRSEvent> *ptr) noexcept;
+::std::size_t cxxbridge1$rust_vec$GGRS$GGRSEvent$capacity(const ::rust::Vec<::GGRS::GGRSEvent> *ptr) noexcept;
+const ::GGRS::GGRSEvent *cxxbridge1$rust_vec$GGRS$GGRSEvent$data(const ::rust::Vec<::GGRS::GGRSEvent> *ptr) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSEvent$reserve_total(::rust::Vec<::GGRS::GGRSEvent> *ptr, ::std::size_t new_cap) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSEvent$set_len(::rust::Vec<::GGRS::GGRSEvent> *ptr, ::std::size_t len) noexcept;
+void cxxbridge1$rust_vec$GGRS$GGRSEvent$truncate(::rust::Vec<::GGRS::GGRSEvent> *ptr, ::std::size_t len) noexcept;
 } // extern "C"
 
 namespace rust {
@@ -270,6 +331,38 @@ void Vec<::GGRS::GGRSPlayer>::set_len(::std::size_t len) noexcept {
 template <>
 void Vec<::GGRS::GGRSPlayer>::truncate(::std::size_t len) {
   return cxxbridge1$rust_vec$GGRS$GGRSPlayer$truncate(this, len);
+}
+template <>
+Vec<::GGRS::GGRSEvent>::Vec() noexcept {
+  cxxbridge1$rust_vec$GGRS$GGRSEvent$new(this);
+}
+template <>
+void Vec<::GGRS::GGRSEvent>::drop() noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$drop(this);
+}
+template <>
+::std::size_t Vec<::GGRS::GGRSEvent>::size() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$len(this);
+}
+template <>
+::std::size_t Vec<::GGRS::GGRSEvent>::capacity() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$capacity(this);
+}
+template <>
+const ::GGRS::GGRSEvent *Vec<::GGRS::GGRSEvent>::data() const noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$data(this);
+}
+template <>
+void Vec<::GGRS::GGRSEvent>::reserve_total(::std::size_t new_cap) noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$reserve_total(this, new_cap);
+}
+template <>
+void Vec<::GGRS::GGRSEvent>::set_len(::std::size_t len) noexcept {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$set_len(this, len);
+}
+template <>
+void Vec<::GGRS::GGRSEvent>::truncate(::std::size_t len) {
+  return cxxbridge1$rust_vec$GGRS$GGRSEvent$truncate(this, len);
 }
 } // namespace cxxbridge1
 } // namespace rust

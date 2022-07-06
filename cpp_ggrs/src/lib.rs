@@ -1,6 +1,6 @@
-use std::{net::SocketAddr, fmt::{self, Display} };
-use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket};
-use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState};
+use std::{net::SocketAddr, fmt::{self, Display}, collections::vec_deque::Drain };
+use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket, SessionState, GGRSEvent, PlayerHandle};
+use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState, GGRSEventType};
 
 #[cxx::bridge(namespace = "GGRS")]
 mod wrapper {
@@ -30,7 +30,7 @@ mod wrapper {
     enum GGRSPlayerType {
         Local,
         Remote,
-        Spectator
+        Spectator,
     }
 
     enum GGRSSessionType {
@@ -41,8 +41,31 @@ mod wrapper {
     }
 
     enum GGRSSessionState {
-        Okay,
-        Syncing,
+        Running,
+        Synchronizing,
+    }
+
+    enum GGRSEventType {
+        Empty,
+        Synchronizing,
+        Synchronized,
+        Disconnected,
+        NetworkInterrupted,
+        NetworkResumed,
+        WaitRecommendation, 
+    }
+
+    struct GGRSEventInfo {
+        addr: String,
+        total: u32,
+        count: u32,
+        disconnect_timeout: u64, // should be 128 but its not supported yet by cxx
+        skip_frames: u32,
+    }
+
+    struct GGRSEvent {
+        event_type: GGRSEventType,
+        event_info: GGRSEventInfo,
     }
 
     extern "Rust" {
@@ -61,9 +84,9 @@ mod wrapper {
         // looking for better solutions...
         fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession>;
         unsafe fn poll_remote_clients(mut session: *mut GGRSSession) -> bool;
-        unsafe fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> bool;
-        unsafe fn get_current_state(mut session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> bool;
-        //fn session_advance_frame() -> Vec<GGR>;
+        unsafe fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool>;
+        unsafe fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState;
+        unsafe fn get_events(mut session: *mut GGRSSession) -> Vec<GGRSEvent>;
         fn test_lib(num: i32) -> i32;
     }
 }
@@ -79,6 +102,20 @@ impl Config for GGRSConfig {
     type Address = SocketAddr; // maybe add a way that people can change their socket type. we'll see later.       
 }
 
+impl Default for wrapper::GGRSEvent {
+    fn default() -> Self {
+        Self { 
+            event_type: wrapper::GGRSEventType::Empty,
+            event_info: wrapper::GGRSEventInfo { 
+                addr: "".to_string(),
+                total: 0,
+                count: 0,
+                disconnect_timeout: 0,
+                skip_frames: 0 
+            }
+        }
+    }
+}
 
 impl Default for GGRSSession{
     fn default() -> Self {
@@ -221,7 +258,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
         for p in &info.players{
             match p.player_type {
                 GGRSPlayerType::Local => {
-                    sess_build = match sess_build.add_player(PlayerType::Local, p.player_handle as usize) {
+                    sess_build = match sess_build.add_player(PlayerType::Local, p.player_handle as PlayerHandle) {
                         Ok(it) => it,
                         Err(_) => return Err(Error{msg: "Error adding local player".to_string()}),
                     };
@@ -232,7 +269,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
                         Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
                     };
 
-                    sess_build = match sess_build.add_player(PlayerType::Remote(sock), p.player_handle as usize) {
+                    sess_build = match sess_build.add_player(PlayerType::Remote(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
                         Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
                     };
@@ -243,7 +280,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
                         Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
                     };
 
-                    sess_build = match sess_build.add_player(PlayerType::Spectator(sock), p.player_handle as usize) {
+                    sess_build = match sess_build.add_player(PlayerType::Spectator(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
                         Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
                     };
@@ -328,17 +365,112 @@ fn poll_remote_clients(mut session: *mut GGRSSession) -> bool{
     return true;
 }
 
-fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> bool{
-    let sess = unsafe { Box::from_raw(session)};
+fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool, Error>{
+    let mut sess = unsafe { Box::from_raw(session)};
+    let mut has_failed = false;
+
+    match sess.as_mut(){
+        GGRSSession::NotSet => (),
+        GGRSSession::Peer2Peer(sess) => { 
+            if sess.add_local_input(player_handle as usize, input).is_err(){
+                has_failed = true;
+            }
+        },
+        GGRSSession::Spectator(_) => (),
+        GGRSSession::Synctest(sess) => {
+            if sess.add_local_input(player_handle as usize, input).is_err(){
+                has_failed = true;
+            }
+        },
+    }
+
     session = Box::into_raw(sess);
-    return true;
+
+    if has_failed {
+        return Err(Error{msg: "Error player is not a local player".to_string()})
+    }
+    Ok(true)
 }
 
-fn get_current_state(mut session: *mut GGRSSession, out_state: &mut GGRSSessionState) -> bool {
-    let sess = unsafe { Box::from_raw(session)};
-    *out_state = GGRSSessionState::Syncing;
+fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState {
+    let mut sess = unsafe { Box::from_raw(session)};
+    let mut state = SessionState::Synchronizing;
+
+    match sess.as_mut() {
+        GGRSSession::NotSet => (),
+        GGRSSession::Peer2Peer(sess) => {
+           state = sess.current_state();
+        },
+        GGRSSession::Spectator(sess) => {
+           state = sess.current_state();
+        },
+        GGRSSession::Synctest(_) => ()
+    }
+
     session = Box::into_raw(sess);
-    return true;
+    let ggrs_state: GGRSSessionState;
+
+    match state {
+        SessionState::Synchronizing => ggrs_state = GGRSSessionState::Synchronizing,
+        SessionState::Running => ggrs_state = GGRSSessionState::Running,
+    }
+
+    return ggrs_state;
+}
+
+fn get_events(mut session: *mut GGRSSession) -> Vec<wrapper::GGRSEvent>{
+    let mut sess = unsafe { Box::from_raw(session)};
+    let mut ggrs_events = Vec::new();
+    match sess.as_mut() {
+        GGRSSession::NotSet => (),
+        GGRSSession::Peer2Peer(sess) => {
+            for ev in sess.events(){
+                ggrs_events.push(ev);
+            } 
+        },
+        GGRSSession::Spectator(sess) => {
+            for ev in sess.events(){
+                ggrs_events.push(ev);
+            } 
+        },
+        GGRSSession::Synctest(_) => (),
+    }
+    session = Box::into_raw(sess);
+    let mut result = Vec::new();
+        for event in ggrs_events{
+            let mut ev = wrapper::GGRSEvent::default();
+            match event {
+                GGRSEvent::Synchronizing { addr, total, count } => {
+                    ev.event_type = GGRSEventType::Synchronizing;
+                    ev.event_info.addr = addr.to_string();
+                    ev.event_info.total = total;
+                    ev.event_info.count = count;
+                },
+                GGRSEvent::Synchronized { addr } => {
+                    ev.event_type = GGRSEventType::Synchronized;
+                    ev.event_info.addr = addr.to_string();
+                },
+                GGRSEvent::Disconnected { addr } => {
+                    ev.event_type = GGRSEventType::Disconnected;
+                    ev.event_info.addr = addr.to_string();
+                },
+                GGRSEvent::NetworkInterrupted { addr, disconnect_timeout } => {
+                    ev.event_type = GGRSEventType::NetworkInterrupted;
+                    ev.event_info.addr = addr.to_string();
+                    ev.event_info.disconnect_timeout = disconnect_timeout as u64;
+                },
+                GGRSEvent::NetworkResumed { addr } => {
+                    ev.event_type = GGRSEventType::NetworkResumed;
+                    ev.event_info.addr = addr.to_string();
+                },
+                GGRSEvent::WaitRecommendation { skip_frames } => {
+                    ev.event_type = GGRSEventType::WaitRecommendation;
+                    ev.event_info.skip_frames = skip_frames;
+                },
+            }
+            result.push(ev);
+    }
+    return result;
 }
 
 #[derive(Debug)]

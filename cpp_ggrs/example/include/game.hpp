@@ -7,7 +7,7 @@ namespace ex {
 namespace game {
 
 struct Player {
-  int X, Y;
+  int X = 0, Y = 0;
 };
 
 struct Game {

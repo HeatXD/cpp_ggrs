@@ -3,12 +3,14 @@
 #include "../include/raylib.h"
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string>
 
+
 void DrawGameState(ex::game::Game &game);
-void PrintEvent(GGRS::GGRSEvent &ev);
+void PrintEvent(GGRS::GGRSEvent &ev, int &frames_to_skip);
 void HandleRequests(ex::game::Game &game, ex::game::SaveState &save,
                     rust::Vec<GGRS::GGRSFrameAction> requests);
 std::uint32_t FetchLocalInput();
@@ -36,7 +38,7 @@ int main(int argc, char **argv) {
   GGRS::setup_ggrs_info(info);
   GGRS::set_num_players(info, 2);
   GGRS::set_sparse_saving(info, true);
-  GGRS::setup_p2p_session(info, local_port, 60, 2, 7);
+  GGRS::setup_p2p_session(info, local_port, 60, 1, 7);
   // add players
   for (int i = 0; i < 2; i++) {
     players[i].player_handle = i;
@@ -55,18 +57,23 @@ int main(int argc, char **argv) {
   // setup raylib
   InitWindow(600, 600, "GGRS C++ GAME");
   SetTargetFPS(60);
-
+  // timesync
+  int frames_to_skip = 0;
+  //
   while (!WindowShouldClose()) {
     // poll other peers
     GGRS::poll_remote_clients(sess);
     // handle events
     auto events = GGRS::get_events(sess);
     for (int i = 0; i < events.size(); i++) {
-      PrintEvent(events[i]);
+      PrintEvent(events[i], frames_to_skip);
     }
     // keep the clients synced
-
-    if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running) {
+    if( frames_to_skip > 0) {
+      frames_to_skip -= 1;
+      std::cout << "Frame: " << game.frame << " skipped: WaitRecommendation" << std::endl;
+    }
+    else if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running) {
       // add local input
       GGRS::add_local_input(sess, local_player, FetchLocalInput());
       // advance frame
@@ -89,10 +96,16 @@ void DrawGameState(ex::game::Game &game) {
   ClearBackground(BLACK);
   int idx = 0;
   for (auto player : game.players) {
-    DrawRectangle(player.X, player.Y, 50, 50, idx == 0 ? RED : BLUE);
+    DrawRectangle(player.X, player.Y, 100, 100, idx == 0 ? RED : BLUE);
     idx++;
   }
-  DrawFPS(50, 50);
+  std::stringstream ss;
+  ss << "P(0) X:" << game.players[0].X << " Y:" << game.players[0].Y
+     << std::endl
+     << "P(1) X:" << game.players[1].X << " Y:" << game.players[1].Y
+     << std::endl;
+  DrawText(ss.str().c_str(), 10, 500, 20, WHITE);
+  DrawFPS(20, 20);
   EndDrawing();
 }
 
@@ -117,13 +130,17 @@ std::string EventTypeToString(GGRS::GGRSEventType type) {
   }
 }
 
-void PrintEvent(GGRS::GGRSEvent &ev) {
+void PrintEvent(GGRS::GGRSEvent &ev, int &frames_to_skip) {
+  
   std::cout << "Event: " << EventTypeToString(ev.event_type)
             << "\nAddress: " << ev.event_info.addr
             << "\nCount: " << ev.event_info.count
             << "\nTotal: " << ev.event_info.total
             << "\nTimeout: " << ev.event_info.disconnect_timeout
             << "\nFrames: " << ev.event_info.skip_frames << std::endl;
+  
+  if (ev.event_type == GGRS::GGRSEventType::WaitRecommendation) 
+    frames_to_skip = ev.event_info.skip_frames;
 }
 
 std::uint32_t FetchLocalInput() {

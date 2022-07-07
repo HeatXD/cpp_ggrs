@@ -581,7 +581,8 @@ fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult, Error
 fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameResult){
     for req in reqs{
         match req{
-            ggrs::GGRSRequest::SaveGameState { cell: _, frame } => {
+            ggrs::GGRSRequest::SaveGameState { cell, frame } => {
+                cell.save(frame, Some(0), Some(0));
                 let mut act = GGRSFrameAction::default();
                 act.action_info.frame = frame;
                 act.action_type = GGRSFrameActionType::SaveGameState;

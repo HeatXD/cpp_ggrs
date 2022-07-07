@@ -10,6 +10,12 @@ namespace GGRS {
   enum class GGRSEventType : ::std::uint8_t;
   struct GGRSEventInfo;
   struct GGRSEvent;
+  struct GGRSFrameResult;
+  struct GGRSFrameAction;
+  enum class GGRSFrameActionType : ::std::uint8_t;
+  struct GGRSFrameActionInfo;
+  struct GGRSInput;
+  enum class GGRSInputStatus : ::std::uint8_t;
   struct GGRSSession;
 }
 
@@ -109,6 +115,64 @@ struct GGRSEvent final {
 };
 #endif // CXXBRIDGE1_STRUCT_GGRS$GGRSEvent
 
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSFrameResult
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSFrameResult
+struct GGRSFrameResult final {
+  bool skip_frame;
+  ::rust::Vec<::GGRS::GGRSFrameAction> actions;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSFrameResult
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSFrameActionInfo
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSFrameActionInfo
+struct GGRSFrameActionInfo final {
+  ::std::int32_t frame;
+  ::rust::Vec<::GGRS::GGRSInput> inputs;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSFrameActionInfo
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSFrameAction
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSFrameAction
+struct GGRSFrameAction final {
+  ::GGRS::GGRSFrameActionType action_type;
+  ::GGRS::GGRSFrameActionInfo action_info;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSFrameAction
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSFrameActionType
+#define CXXBRIDGE1_ENUM_GGRS$GGRSFrameActionType
+enum class GGRSFrameActionType : ::std::uint8_t {
+  SaveGameState = 0,
+  LoadGameState = 1,
+  AdvanceFrame = 2,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSFrameActionType
+
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSInput
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSInput
+struct GGRSInput final {
+  ::std::uint32_t input;
+  ::GGRS::GGRSInputStatus status;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSInput
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSInputStatus
+#define CXXBRIDGE1_ENUM_GGRS$GGRSInputStatus
+enum class GGRSInputStatus : ::std::uint8_t {
+  Confirmed = 0,
+  Predicted = 1,
+  Disconnected = 2,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSInputStatus
+
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 struct GGRSSession final : public ::rust::Opaque {
@@ -146,6 +210,8 @@ bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle
 ::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session) noexcept;
 
 ::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session) noexcept;
+
+::GGRS::GGRSFrameResult advance_frame(::GGRS::GGRSSession *session);
 
 ::std::int32_t test_lib(::std::int32_t num) noexcept;
 } // namespace GGRS

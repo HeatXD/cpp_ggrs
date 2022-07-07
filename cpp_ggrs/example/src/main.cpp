@@ -10,6 +10,9 @@
 void UpdateGameState();
 void DrawGameState();
 void PrintEvent(GGRS::GGRSEvent &ev);
+void HandleRequests(rust::Vec<GGRS::GGRSFrameAction> requests);
+std::uint32_t FetchLocalInput();
+bool IsBitSet(std::uint32_t bf, int pos);
 
 int main(int argc, char **argv) {
   if (argc != 4) {
@@ -23,13 +26,10 @@ int main(int argc, char **argv) {
   std::uint16_t local_port = atoi(argv[2]);
   // 3 > remote address
   rust::string remote_addr = argv[3];
-  std::cout << local_player << " " << local_port << " " << remote_addr
-            << std::endl;
+  std::cout << local_player << " " << local_port << " " << remote_addr << std::endl;
   // setup ggrs
   GGRS::GGRSSessionInfo info;
   GGRS::GGRSPlayer players[2];
-  players[0].socket_addr = remote_addr;
-
   GGRS::setup_ggrs_info(info);
   GGRS::set_num_players(info, 2);
   GGRS::set_sparse_saving(info, false);
@@ -54,16 +54,26 @@ int main(int argc, char **argv) {
   SetTargetFPS(60);
 
   while (!WindowShouldClose()) {
+    // poll other peers
     GGRS::poll_remote_clients(sess);
+    // handle events
     auto events = GGRS::get_events(sess);
     for (int i = 0; i < events.size(); i++) {
       PrintEvent(events[i]);
     }
-    if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running) {
-      DrawText("Running!", 150, 150, 25, GREEN);
-    } else {
-      DrawText("Syncing!", 150, 150, 25, RED);
-    }
+    int input = FetchLocalInput();
+    // if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running)
+    // {
+    //   // add local input
+    //   GGRS::add_local_input(sess,local_player, FetchLocalInput());
+    //   // advance frame
+    //   auto result = GGRS::advance_frame(sess);
+    //   // handle update
+    //   if (!result.skip_frame) {
+    //     HandleRequests(result.actions);
+    //   }
+    // }
+    // render game
     DrawGameState();
   }
   return 0;
@@ -71,7 +81,7 @@ int main(int argc, char **argv) {
 
 void DrawGameState() {
   BeginDrawing();
-  ClearBackground(RAYWHITE);
+  ClearBackground(BLACK);
   DrawFPS(50, 50);
   EndDrawing();
 }
@@ -93,7 +103,7 @@ std::string EventTypeToString(GGRS::GGRSEventType type) {
   case GGRS::GGRSEventType::WaitRecommendation:
     return "WaitRecommendation";
   default:
-    return "Invalid Session Type";
+    return "Invalid Event Type";
   }
 }
 
@@ -104,4 +114,23 @@ void PrintEvent(GGRS::GGRSEvent &ev) {
             << "\nTotal: " << ev.event_info.total
             << "\nTimeout: " << ev.event_info.disconnect_timeout
             << "\nFrames: " << ev.event_info.skip_frames << std::endl;
+}
+
+std::uint32_t FetchLocalInput() {
+  std::uint32_t input = 0;
+  
+  if (IsKeyDown(KEY_W))
+    input |= (1 << 0);
+  if (IsKeyDown(KEY_S))
+    input |= (1 << 1);
+  if (IsKeyDown(KEY_A))
+    input |= (1 << 2);
+  if (IsKeyDown(KEY_D))
+    input |= (1 << 3);
+  
+  return input;
+}
+
+bool IsBitSet(std::uint32_t bf, int pos) {
+  return ((bf >> pos) & 1) ? true : false;
 }

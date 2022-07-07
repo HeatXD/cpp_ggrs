@@ -1,6 +1,6 @@
-use std::{net::SocketAddr, fmt::{self, Display}, collections::vec_deque::Drain };
-use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket, SessionState, GGRSEvent, PlayerHandle};
-use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState, GGRSEventType};
+use std::{net::SocketAddr, fmt::{self, Display}};
+use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket, SessionState, GGRSEvent, PlayerHandle, GGRSRequest};
+use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState, GGRSEventType, GGRSFrameResult, GGRSFrameAction, GGRSFrameActionType, GGRSFrameActionInfo, GGRSInput, GGRSInputStatus};
 
 #[cxx::bridge(namespace = "GGRS")]
 mod wrapper {
@@ -68,6 +68,38 @@ mod wrapper {
         event_info: GGRSEventInfo,
     }
 
+    struct GGRSFrameResult{
+        skip_frame: bool,
+        actions: Vec<GGRSFrameAction>,
+    }
+
+    struct GGRSFrameAction {
+        action_type: GGRSFrameActionType,
+        action_info: GGRSFrameActionInfo,
+    }
+
+    enum GGRSFrameActionType{
+        SaveGameState,
+        LoadGameState,
+        AdvanceFrame,
+    }
+
+    struct GGRSFrameActionInfo{
+        frame: i32,
+        inputs: Vec<GGRSInput>,
+    }
+
+    struct GGRSInput{
+        input: u32,
+        status: GGRSInputStatus,
+    }
+
+    enum GGRSInputStatus{
+        Confirmed,
+        Predicted,
+        Disconnected,
+    }
+
     extern "Rust" {
         type GGRSSession;
         // I like when my outwards facing functions return something. helps with testing
@@ -87,6 +119,7 @@ mod wrapper {
         unsafe fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool>;
         unsafe fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState;
         unsafe fn get_events(mut session: *mut GGRSSession) -> Vec<GGRSEvent>;
+        unsafe fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult>;
         fn test_lib(num: i32) -> i32;
     }
 }
@@ -100,6 +133,33 @@ impl Config for GGRSConfig {
     type Input = u32; // good for now         
     type State = u8; // good for now not going to use this anyways just gonna supply the user the frame number of action      
     type Address = SocketAddr; // maybe add a way that people can change their socket type. we'll see later.       
+}
+
+impl Default for GGRSFrameAction {
+    fn default() -> Self {
+        Self { 
+            action_type: GGRSFrameActionType::AdvanceFrame,
+            action_info: GGRSFrameActionInfo::default()
+        }
+    }
+}
+
+impl Default for GGRSFrameActionInfo {
+    fn default() -> Self {
+        Self { 
+            frame: 0,
+            inputs: Vec::new()
+        }
+    }
+}
+
+impl Default for GGRSFrameResult {
+    fn default() -> Self {
+        Self { 
+            skip_frame: false,
+            actions: Vec::new()
+        }
+    }
 }
 
 impl Default for wrapper::GGRSEvent {
@@ -165,6 +225,7 @@ impl GGRSSessionInfo {
         self.sparse_saving = tmp.sparse_saving;
         self.host = String::new();
         self.players = Vec::new();
+        self.session_started = tmp.session_started;
     }
 
     fn set_num_players(&mut self, num_players: u32){
@@ -260,7 +321,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
                 GGRSPlayerType::Local => {
                     sess_build = match sess_build.add_player(PlayerType::Local, p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(_) => return Err(Error{msg: "Error adding local player".to_string()}),
+                        Err(err) => return Err(Error{msg: err.to_string()}),
                     };
                 },
                 GGRSPlayerType::Remote => {
@@ -271,7 +332,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
 
                     sess_build = match sess_build.add_player(PlayerType::Remote(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
+                        Err(err) => return Err(Error{msg: err.to_string()}),
                     };
                 },
                 GGRSPlayerType::Spectator => {
@@ -282,7 +343,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
 
                     sess_build = match sess_build.add_player(PlayerType::Spectator(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(_) => return Err(Error{msg: "Error adding remote player".to_string()}),
+                        Err(err) => return Err(Error{msg: err.to_string()}),
                     };
                 },
                 _ => return Err(Error{msg: "Error unsupported player type".to_string()})
@@ -294,7 +355,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
             GGRSSessionType::Peer2Peer => {
                 sess_build = match sess_build.with_fps(info.fps as usize) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: format!("Error invalid value given as fps parameter: {}", info.fps)}),
+                    Err(err) => return Err(Error{msg: err.to_string()}),
                 };
 
                 sess_build = sess_build
@@ -308,18 +369,18 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
 
                 session = GGRSSession::Peer2Peer(match sess_build.start_p2p_session(sock) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: "Error couldnt create p2p session".to_string()}),
+                    Err(err) => return Err(Error{msg: err.to_string()}),
                 });
             },
             GGRSSessionType::Spectator => {
                 sess_build = match sess_build.with_max_frames_behind(info.max_frames_behind as usize) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: "Error invalid value given as max_frames_behind parameter".to_string()}),
+                    Err(err) => return Err(Error{msg: err.to_string()}),
                 };
 
                 sess_build = match sess_build.with_catchup_speed(info.catchup_speed as usize) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: "Error invalid value given as catchup_speed parameter".to_string()}),
+                    Err(err) => return Err(Error{msg: err.to_string()}),
                 };
 
                 let sock = match UdpNonBlockingSocket::bind_to_port(info.local_port) {
@@ -341,7 +402,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
 
                 session = GGRSSession::Synctest(match sess_build.start_synctest_session() {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: "Error failed to create synctest session".to_string()}),
+                    Err(err) => return Err(Error{msg: err.to_string()}),
                 });
             },
             _ => return Err(Error{msg: "Error unsupported session type".to_string()})
@@ -353,6 +414,7 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
     Err(Error{msg: "Error session already started or session type not set".to_string()})
 }
 
+#[allow(unused_assignments)]
 fn poll_remote_clients(mut session: *mut GGRSSession) -> bool{
     let mut sess = unsafe { Box::from_raw(session)};
     match sess.as_mut() {
@@ -365,6 +427,7 @@ fn poll_remote_clients(mut session: *mut GGRSSession) -> bool{
     return true;
 }
 
+#[allow(unused_assignments)]
 fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool, Error>{
     let mut sess = unsafe { Box::from_raw(session)};
     let mut has_failed = false;
@@ -392,6 +455,7 @@ fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32
     Ok(true)
 }
 
+#[allow(unused_assignments)]
 fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState {
     let mut sess = unsafe { Box::from_raw(session)};
     let mut state = SessionState::Synchronizing;
@@ -418,6 +482,7 @@ fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState {
     return ggrs_state;
 }
 
+#[allow(unused_assignments)]
 fn get_events(mut session: *mut GGRSSession) -> Vec<wrapper::GGRSEvent>{
     let mut sess = unsafe { Box::from_raw(session)};
     let mut ggrs_events = Vec::new();
@@ -473,6 +538,77 @@ fn get_events(mut session: *mut GGRSSession) -> Vec<wrapper::GGRSEvent>{
     return result;
 }
 
+#[allow(unused_assignments)]
+fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult, Error>{
+    let mut sess = unsafe { Box::from_raw(session)};
+    let mut result = GGRSFrameResult::default();
+    match sess.as_mut(){
+        GGRSSession::NotSet => (),
+        GGRSSession::Peer2Peer(sess) => {
+            match sess.advance_frame(){
+                Ok(reqs) => {
+                    handle_requests(reqs, &mut result);
+                },
+                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                Err(err) => return Err(Error{msg: err.to_string()})
+            }
+        },
+        GGRSSession::Spectator(sess) => {
+            match sess.advance_frame(){
+                Ok(reqs) => {
+                    handle_requests(reqs, &mut result);
+                },
+                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                Err(err) => return Err(Error{msg: err.to_string()})
+            }
+        },
+        GGRSSession::Synctest(sess) => {
+            match sess.advance_frame(){
+                Ok(reqs) => {
+                    handle_requests(reqs, &mut result);
+                },
+                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                Err(err) => return Err(Error{msg: err.to_string()})
+            }
+        },
+    }
+    session = Box::into_raw(sess);
+    Ok(result)
+}
+
+
+fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameResult){
+    for req in reqs{
+        match req{
+            ggrs::GGRSRequest::SaveGameState { cell: _, frame } => {
+                let mut act = GGRSFrameAction::default();
+                act.action_info.frame = frame;
+                act.action_type = GGRSFrameActionType::SaveGameState;
+                result.actions.push(act);
+            },
+            ggrs::GGRSRequest::LoadGameState { cell: _, frame } => {
+                let mut act = GGRSFrameAction::default();
+                act.action_info.frame = frame;
+                act.action_type = GGRSFrameActionType::LoadGameState;
+                result.actions.push(act);
+            },
+            ggrs::GGRSRequest::AdvanceFrame { inputs } => {
+                let mut act = GGRSFrameAction::default();
+                act.action_type = GGRSFrameActionType::AdvanceFrame;
+                for (input, status) in inputs{
+                    let stat = match status{
+                        ggrs::InputStatus::Confirmed => GGRSInputStatus::Confirmed,
+                        ggrs::InputStatus::Predicted => GGRSInputStatus::Predicted,
+                        ggrs::InputStatus::Disconnected => GGRSInputStatus::Disconnected,
+                    };
+                    act.action_info.inputs.push(GGRSInput{input, status: stat});
+                }
+                result.actions.push(act);
+            },
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Error{
     msg: String
@@ -482,6 +618,6 @@ impl std::error::Error for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(format!("Internal rust error msg: {}", self.msg).as_str())
+        f.write_str(format!("INTERNAL RUST ERROR! msg: {}", self.msg).as_str())
     }
 }

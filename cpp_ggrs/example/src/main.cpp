@@ -7,12 +7,11 @@
 #include <stdlib.h>
 #include <string>
 
-void UpdateGameState();
-void DrawGameState();
+void DrawGameState(ex::game::Game &game);
 void PrintEvent(GGRS::GGRSEvent &ev);
-void HandleRequests(rust::Vec<GGRS::GGRSFrameAction> requests);
+void HandleRequests(ex::game::Game &game, ex::game::SaveState &save,
+                    rust::Vec<GGRS::GGRSFrameAction> requests);
 std::uint32_t FetchLocalInput();
-bool IsBitSet(std::uint32_t bf, int pos);
 
 int main(int argc, char **argv) {
   if (argc != 4) {
@@ -26,13 +25,17 @@ int main(int argc, char **argv) {
   std::uint16_t local_port = atoi(argv[2]);
   // 3 > remote address
   rust::string remote_addr = argv[3];
-  std::cout << local_player << " " << local_port << " " << remote_addr << std::endl;
+  std::cout << local_player << " " << local_port << " " << remote_addr
+            << std::endl;
+  // setup game
+  ex::game::SaveState save;
+  ex::game::Game game;
   // setup ggrs
   GGRS::GGRSSessionInfo info;
   GGRS::GGRSPlayer players[2];
   GGRS::setup_ggrs_info(info);
   GGRS::set_num_players(info, 2);
-  GGRS::set_sparse_saving(info, false);
+  GGRS::set_sparse_saving(info, true);
   GGRS::setup_p2p_session(info, local_port, 60, 2, 7);
   // add players
   for (int i = 0; i < 2; i++) {
@@ -61,27 +64,34 @@ int main(int argc, char **argv) {
     for (int i = 0; i < events.size(); i++) {
       PrintEvent(events[i]);
     }
-    int input = FetchLocalInput();
-    // if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running)
-    // {
-    //   // add local input
-    //   GGRS::add_local_input(sess,local_player, FetchLocalInput());
-    //   // advance frame
-    //   auto result = GGRS::advance_frame(sess);
-    //   // handle update
-    //   if (!result.skip_frame) {
-    //     HandleRequests(result.actions);
-    //   }
-    // }
+    // keep the clients synced
+
+    if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running) {
+      // add local input
+      GGRS::add_local_input(sess, local_player, FetchLocalInput());
+      // advance frame
+      auto result = GGRS::advance_frame(sess);
+      // handle update
+      if (!result.skip_frame) {
+        HandleRequests(game, save, result.actions);
+      } else {
+        std::cout << "Skipping Frame: " << game.frame << std::endl;
+      }
+    }
     // render game
-    DrawGameState();
+    DrawGameState(game);
   }
   return 0;
 }
 
-void DrawGameState() {
+void DrawGameState(ex::game::Game &game) {
   BeginDrawing();
   ClearBackground(BLACK);
+  int idx = 0;
+  for (auto player : game.players) {
+    DrawRectangle(player.X, player.Y, 50, 50, idx == 0 ? RED : BLUE);
+    idx++;
+  }
   DrawFPS(50, 50);
   EndDrawing();
 }
@@ -118,7 +128,7 @@ void PrintEvent(GGRS::GGRSEvent &ev) {
 
 std::uint32_t FetchLocalInput() {
   std::uint32_t input = 0;
-  
+
   if (IsKeyDown(KEY_W))
     input |= (1 << 0);
   if (IsKeyDown(KEY_S))
@@ -127,10 +137,23 @@ std::uint32_t FetchLocalInput() {
     input |= (1 << 2);
   if (IsKeyDown(KEY_D))
     input |= (1 << 3);
-  
+
   return input;
 }
 
-bool IsBitSet(std::uint32_t bf, int pos) {
-  return ((bf >> pos) & 1) ? true : false;
+void HandleRequests(ex::game::Game &game, ex::game::SaveState &save,
+                    rust::Vec<GGRS::GGRSFrameAction> requests) {
+  for (auto action : requests) {
+    switch (action.action_type) {
+    case GGRS::GGRSFrameActionType::SaveGameState:
+      ex::game::SaveGame(game,  save);
+      break;
+    case GGRS::GGRSFrameActionType::LoadGameState:
+      ex::game::LoadGame(game, save);
+      break;
+    case GGRS::GGRSFrameActionType::AdvanceFrame:
+      ex::game::AdvanceGame(game, action.action_info.inputs);
+      break;
+    }
+  }
 }

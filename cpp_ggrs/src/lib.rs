@@ -120,6 +120,8 @@ mod wrapper {
         unsafe fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState;
         unsafe fn get_events(mut session: *mut GGRSSession) -> Vec<GGRSEvent>;
         unsafe fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult>;
+        unsafe fn get_frames_ahead(mut session: *mut GGRSSession) -> i32;
+        // test
         fn test_lib(num: i32) -> i32;
     }
 }
@@ -576,7 +578,6 @@ fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult, Error
     Ok(result)
 }
 
-
 fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameResult){
     for req in reqs{
         match req{
@@ -607,6 +608,18 @@ fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameRes
             },
         }
     }
+}
+
+#[allow(unused_assignments)]
+fn get_frames_ahead(mut session: *mut GGRSSession) -> i32{
+    let mut sess = unsafe { Box::from_raw(session)};
+    let mut ahead = 0;
+    match sess.as_mut() {
+        GGRSSession::NotSet | GGRSSession::Spectator(_) | GGRSSession::Synctest(_) => (),
+        GGRSSession::Peer2Peer(sess) => ahead = sess.frames_ahead(),
+    }
+    session = Box::into_raw(sess);
+    return ahead;
 }
 
 #[derive(Debug)]

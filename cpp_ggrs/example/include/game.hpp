@@ -2,7 +2,6 @@
 #define _EXAMPLE_GAME_H
 
 #include "../../out/cpp_ggrs.h"
-#include <stdint.h>
 
 namespace ex {
 namespace game {
@@ -16,7 +15,16 @@ struct Game {
   Player players[2];
 };
 
-void AdvanceGame(Game &game, rust::Vec<uint32_t> inputs);
+struct SaveState {
+  Game save;
+};
+
+void AdvanceGame(Game &game, rust::Vec<GGRS::GGRSInput> inputs);
+void SaveGame(Game game, SaveState &save);
+void LoadGame(Game &game, SaveState &save);
+
+bool IsBitSet(std::uint32_t bf, int pos);
+
 } // namespace game
 } // namespace ex
 

@@ -140,7 +140,7 @@ void PrintEvent(GGRS::GGRSEvent &ev, int &frames_to_skip) {
             << "\nFrames: " << ev.event_info.skip_frames << std::endl;
   
   if (ev.event_type == GGRS::GGRSEventType::WaitRecommendation) 
-    frames_to_skip = ev.event_info.skip_frames;
+    frames_to_skip += ev.event_info.skip_frames;
 }
 
 std::uint32_t FetchLocalInput() {

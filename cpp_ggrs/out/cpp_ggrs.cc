@@ -269,7 +269,7 @@ void GGRS$cxxbridge1$get_events(::GGRS::GGRSSession *session, ::rust::Vec<::GGRS
 
 ::std::int32_t GGRS$cxxbridge1$get_frames_ahead(::GGRS::GGRSSession *session) noexcept;
 
-::std::int32_t GGRS$cxxbridge1$test_lib(::std::int32_t num) noexcept;
+bool GGRS$cxxbridge1$clean_session(::GGRS::GGRSSession *session) noexcept;
 } // extern "C"
 
 ::std::size_t GGRSSession::layout::size() noexcept {
@@ -354,8 +354,8 @@ bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle
   return GGRS$cxxbridge1$get_frames_ahead(session);
 }
 
-::std::int32_t test_lib(::std::int32_t num) noexcept {
-  return GGRS$cxxbridge1$test_lib(num);
+bool clean_session(::GGRS::GGRSSession *session) noexcept {
+  return GGRS$cxxbridge1$clean_session(session);
 }
 } // namespace GGRS
 

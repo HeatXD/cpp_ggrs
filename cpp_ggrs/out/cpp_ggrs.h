@@ -215,5 +215,5 @@ bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle
 
 ::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session) noexcept;
 
-::std::int32_t test_lib(::std::int32_t num) noexcept;
+bool clean_session(::GGRS::GGRSSession *session) noexcept;
 } // namespace GGRS

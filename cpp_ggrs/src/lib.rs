@@ -1,6 +1,18 @@
 use std::{net::SocketAddr, fmt::{self, Display}};
-use ggrs::{Config, P2PSession, SessionBuilder, SpectatorSession, SyncTestSession, PlayerType, UdpNonBlockingSocket, SessionState, GGRSEvent, PlayerHandle, GGRSRequest};
-use wrapper::{GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType, GGRSSessionState, GGRSEventType, GGRSFrameResult, GGRSFrameAction, GGRSFrameActionType, GGRSFrameActionInfo, GGRSInput, GGRSInputStatus};
+
+use ggrs::{
+    Config, P2PSession, SessionBuilder,
+    SpectatorSession, SyncTestSession, PlayerType,
+    UdpNonBlockingSocket, SessionState, GGRSEvent,
+    PlayerHandle, GGRSRequest
+};
+
+use wrapper::{
+    GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType,
+    GGRSSessionState, GGRSEventType, GGRSFrameResult, GGRSFrameAction,
+    GGRSFrameActionType,
+    GGRSFrameActionInfo, GGRSInput, GGRSInputStatus
+};
 
 #[cxx::bridge(namespace = "GGRS")]
 mod wrapper {
@@ -95,7 +107,7 @@ mod wrapper {
     }
 
     enum GGRSInputStatus{
-        Confirmed,
+        Confirmed, 
         Predicted,
         Disconnected,
     }
@@ -121,13 +133,8 @@ mod wrapper {
         unsafe fn get_events(mut session: *mut GGRSSession) -> Vec<GGRSEvent>;
         unsafe fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult>;
         unsafe fn get_frames_ahead(mut session: *mut GGRSSession) -> i32;
-        // test
-        fn test_lib(num: i32) -> i32;
+        unsafe fn clean_session(session: *mut GGRSSession) -> bool;
     }
-}
-
-fn test_lib(num: i32) -> i32{
-    num * 7
 }
 
 pub struct GGRSConfig;
@@ -184,6 +191,7 @@ impl Default for GGRSSession{
         GGRSSession::NotSet
     }
 }
+
 pub enum GGRSSession {
     NotSet,
     Peer2Peer(P2PSession<GGRSConfig>),
@@ -622,6 +630,13 @@ fn get_frames_ahead(mut session: *mut GGRSSession) -> i32{
     session = Box::into_raw(sess);
     return ahead;
 }
+
+#[allow(unused_assignments)]
+ fn clean_session(session: *mut GGRSSession) -> bool{
+    unsafe{drop(Box::from_raw(session))};
+    return true;
+}
+
 
 #[derive(Debug)]
 struct Error{

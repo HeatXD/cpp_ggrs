@@ -88,6 +88,8 @@ int main(int argc, char **argv) {
     // render game
     DrawGameState(game);
   }
+  std::cout << "Session Clean: " << GGRS::clean_session(sess) << std::endl;
+  std::cout << "Session Clean: " << sess << std::endl;
   return 0;
 }
 

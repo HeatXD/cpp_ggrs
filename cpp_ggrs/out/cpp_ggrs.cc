@@ -28,32 +28,13 @@ union MaybeUninit {
   MaybeUninit() {}
   ~MaybeUninit() {}
 };
-
-namespace {
-namespace repr {
-struct PtrLen final {
-  void *ptr;
-  ::std::size_t len;
-};
-} // namespace repr
-
-template <>
-class impl<Error> final {
-public:
-  static Error error(repr::PtrLen repr) noexcept {
-    Error error;
-    error.msg = static_cast<const char *>(repr.ptr);
-    error.len = repr.len;
-    return error;
-  }
-};
-} // namespace
 } // namespace cxxbridge1
 } // namespace rust
 
 namespace GGRS {
   struct GGRSSessionInfo;
   struct GGRSPlayer;
+  enum class GGRSErrorType : ::std::uint8_t;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
   enum class GGRSSessionState : ::std::uint8_t;
@@ -101,6 +82,26 @@ struct GGRSPlayer final {
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_GGRS$GGRSPlayer
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
+#define CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
+enum class GGRSErrorType : ::std::uint8_t {
+  GGRSOk = 0,
+  GGRSAddLocalPlayer = 1,
+  GGRSSocketParse = 2,
+  GGRSAddRemotePlayer = 3,
+  GGRSAddSpectator = 4,
+  GGRSPlayerTypeNotFound = 5,
+  GGRSFailedSessionAlloc = 6,
+  GGRSSessionCreation = 7,
+  GGRSSocketBindToPort = 8,
+  GGRSInvalidSessionType = 9,
+  GGRSSessionStarted = 10,
+  GGRSInvalidSessionPointer = 11,
+  GGRSNotLocalPlayer = 12,
+  GGRSAdvanceFrame = 13,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
 
 #ifndef CXXBRIDGE1_ENUM_GGRS$GGRSPlayerType
 #define CXXBRIDGE1_ENUM_GGRS$GGRSPlayerType
@@ -255,19 +256,19 @@ bool GGRS$cxxbridge1$set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint3
 
 bool GGRS$cxxbridge1$set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-::rust::repr::PtrLen GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSSession **return$) noexcept;
+::GGRS::GGRSSession *GGRS$cxxbridge1$create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSErrorType &err) noexcept;
 
-bool GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+::GGRS::GGRSErrorType GGRS$cxxbridge1$poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-::rust::repr::PtrLen GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input, bool *return$) noexcept;
+::GGRS::GGRSErrorType GGRS$cxxbridge1$add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
 
-::GGRS::GGRSSessionState GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session) noexcept;
+::GGRS::GGRSSessionState GGRS$cxxbridge1$get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
-void GGRS$cxxbridge1$get_events(::GGRS::GGRSSession *session, ::rust::Vec<::GGRS::GGRSEvent> *return$) noexcept;
+void GGRS$cxxbridge1$get_events(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err, ::rust::Vec<::GGRS::GGRSEvent> *return$) noexcept;
 
-::rust::repr::PtrLen GGRS$cxxbridge1$advance_frame(::GGRS::GGRSSession *session, ::GGRS::GGRSFrameResult *return$) noexcept;
+void GGRS$cxxbridge1$advance_frame(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err, ::GGRS::GGRSFrameResult *return$) noexcept;
 
-::std::int32_t GGRS$cxxbridge1$get_frames_ahead(::GGRS::GGRSSession *session) noexcept;
+::std::int32_t GGRS$cxxbridge1$get_frames_ahead(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
 bool GGRS$cxxbridge1$clean_session(::GGRS::GGRSSession *session) noexcept;
 } // extern "C"
@@ -309,49 +310,36 @@ bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept {
   return GGRS$cxxbridge1$set_sparse_saving(info, enable);
 }
 
-::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info) {
-  ::rust::MaybeUninit<::GGRS::GGRSSession *> return$;
-  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$create_session(info, &return$.value);
-  if (error$.ptr) {
-    throw ::rust::impl<::rust::Error>::error(error$);
-  }
-  return ::std::move(return$.value);
+::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSErrorType &err) noexcept {
+  return GGRS$cxxbridge1$create_session(info, err);
 }
 
-bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
+::GGRS::GGRSErrorType poll_remote_clients(::GGRS::GGRSSession *session) noexcept {
   return GGRS$cxxbridge1$poll_remote_clients(session);
 }
 
-bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) {
-  ::rust::MaybeUninit<bool> return$;
-  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$add_local_input(session, player_handle, input, &return$.value);
-  if (error$.ptr) {
-    throw ::rust::impl<::rust::Error>::error(error$);
-  }
-  return ::std::move(return$.value);
+::GGRS::GGRSErrorType add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept {
+  return GGRS$cxxbridge1$add_local_input(session, player_handle, input);
 }
 
-::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session) noexcept {
-  return GGRS$cxxbridge1$get_current_state(session);
+::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept {
+  return GGRS$cxxbridge1$get_current_state(session, err);
 }
 
-::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session) noexcept {
+::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept {
   ::rust::MaybeUninit<::rust::Vec<::GGRS::GGRSEvent>> return$;
-  GGRS$cxxbridge1$get_events(session, &return$.value);
+  GGRS$cxxbridge1$get_events(session, err, &return$.value);
   return ::std::move(return$.value);
 }
 
-::GGRS::GGRSFrameResult advance_frame(::GGRS::GGRSSession *session) {
+::GGRS::GGRSFrameResult advance_frame(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept {
   ::rust::MaybeUninit<::GGRS::GGRSFrameResult> return$;
-  ::rust::repr::PtrLen error$ = GGRS$cxxbridge1$advance_frame(session, &return$.value);
-  if (error$.ptr) {
-    throw ::rust::impl<::rust::Error>::error(error$);
-  }
+  GGRS$cxxbridge1$advance_frame(session, err, &return$.value);
   return ::std::move(return$.value);
 }
 
-::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session) noexcept {
-  return GGRS$cxxbridge1$get_frames_ahead(session);
+::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept {
+  return GGRS$cxxbridge1$get_frames_ahead(session, err);
 }
 
 bool clean_session(::GGRS::GGRSSession *session) noexcept {

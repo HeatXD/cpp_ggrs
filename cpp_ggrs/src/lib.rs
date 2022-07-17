@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, fmt::{self, Display}};
+use std::{net::SocketAddr, mem, ptr};
 
 use ggrs::{
     Config, P2PSession, SessionBuilder,
@@ -11,7 +11,7 @@ use wrapper::{
     GGRSPlayer, GGRSSessionType, GGRSSessionInfo, GGRSPlayerType,
     GGRSSessionState, GGRSEventType, GGRSFrameResult, GGRSFrameAction,
     GGRSFrameActionType,
-    GGRSFrameActionInfo, GGRSInput, GGRSInputStatus
+    GGRSFrameActionInfo, GGRSInput, GGRSInputStatus, GGRSErrorType
 };
 
 #[cxx::bridge(namespace = "GGRS")]
@@ -37,6 +37,23 @@ mod wrapper {
         player_handle: u32,
         player_type: GGRSPlayerType,
         socket_addr: String
+    }
+
+    enum GGRSErrorType{
+        GGRSOk,
+        GGRSAddLocalPlayer,
+        GGRSSocketParse,
+        GGRSAddRemotePlayer,
+        GGRSAddSpectator,
+        GGRSPlayerTypeNotFound,
+        GGRSFailedSessionAlloc,
+        GGRSSessionCreation,
+        GGRSSocketBindToPort,
+        GGRSInvalidSessionType,
+        GGRSSessionStarted,
+        GGRSInvalidSessionPointer,
+        GGRSNotLocalPlayer,
+        GGRSAdvanceFrame,
     }
 
     enum GGRSPlayerType {
@@ -126,13 +143,13 @@ mod wrapper {
         // session creation and event handling
         // since boxes don't want to work with cxx i have to use unsafe raw pointers.
         // looking for better solutions...
-        fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession>;
-        unsafe fn poll_remote_clients(mut session: *mut GGRSSession) -> bool;
-        unsafe fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool>;
-        unsafe fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState;
-        unsafe fn get_events(mut session: *mut GGRSSession) -> Vec<GGRSEvent>;
-        unsafe fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult>;
-        unsafe fn get_frames_ahead(mut session: *mut GGRSSession) -> i32;
+        fn create_session(info: &mut GGRSSessionInfo, err: &mut GGRSErrorType) -> *mut GGRSSession;
+        unsafe fn poll_remote_clients(session: *mut GGRSSession) -> GGRSErrorType;
+        unsafe fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> GGRSErrorType;
+        unsafe fn get_current_state(session: *mut GGRSSession, err: &mut GGRSErrorType) -> GGRSSessionState;
+        unsafe fn get_events(session: *mut GGRSSession, err: &mut GGRSErrorType) -> Vec<GGRSEvent>;
+        unsafe fn advance_frame(session: *mut GGRSSession, err: &mut GGRSErrorType) -> GGRSFrameResult;
+        unsafe fn get_frames_ahead(session: *mut GGRSSession, err: &mut GGRSErrorType) -> i32;
         unsafe fn clean_session(session: *mut GGRSSession) -> bool;
     }
 }
@@ -319,7 +336,7 @@ fn set_sparse_saving(info: &mut GGRSSessionInfo, enable: bool) -> bool{
     return false;
 }
 
-fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>{
+fn create_session(info: &mut GGRSSessionInfo, err: &mut GGRSErrorType) -> *mut GGRSSession{
     if info.session_type != GGRSSessionType::NotSet && !info.session_started {
         let mut sess_build = SessionBuilder::<GGRSConfig>::new()
             .with_num_players(info.num_players as usize)
@@ -331,41 +348,69 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
                 GGRSPlayerType::Local => {
                     sess_build = match sess_build.add_player(PlayerType::Local, p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(err) => return Err(Error{msg: err.to_string()}),
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSAddLocalPlayer;
+                            return ptr::null_mut();
+                        },
                     };
                 },
                 GGRSPlayerType::Remote => {
                     let sock: SocketAddr = match p.socket_addr.parse() {
                         Ok(it) => it,
-                        Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSSocketParse;
+                            return ptr::null_mut();
+                        },
                     };
 
                     sess_build = match sess_build.add_player(PlayerType::Remote(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(err) => return Err(Error{msg: err.to_string()}),
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSAddRemotePlayer;
+                            return ptr::null_mut();
+                        },
                     };
                 },
                 GGRSPlayerType::Spectator => {
                     let sock: SocketAddr = match p.socket_addr.parse() {
                         Ok(it) => it,
-                        Err(_) => return Err(Error{msg: "Error parsing remote player address".to_string()}),
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSSocketParse;
+                            return ptr::null_mut();
+                        },
                     };
 
                     sess_build = match sess_build.add_player(PlayerType::Spectator(sock), p.player_handle as PlayerHandle) {
                         Ok(it) => it,
-                        Err(err) => return Err(Error{msg: err.to_string()}),
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSAddSpectator;
+                            return ptr::null_mut();
+                        },
                     };
                 },
-                _ => return Err(Error{msg: "Error unsupported player type".to_string()})
+                _ => {
+                        *err = GGRSErrorType::GGRSPlayerTypeNotFound;
+                        return ptr::null_mut();
+                }
             }
         }
-        let session: GGRSSession;
+        let session: *mut GGRSSession;
+        unsafe{
+            session = libc::malloc(mem::size_of::<GGRSSession>()).cast();
+            if session.is_null() {
+                *err = GGRSErrorType::GGRSFailedSessionAlloc;
+                return ptr::null_mut();
+            }
+        }
         // create the session
         match info.session_type {
             GGRSSessionType::Peer2Peer => {
                 sess_build = match sess_build.with_fps(info.fps as usize) {
                     Ok(it) => it,
-                    Err(err) => return Err(Error{msg: err.to_string()}),
+                    Err(_) => {
+                            *err = GGRSErrorType::GGRSSessionCreation;
+                            return ptr::null_mut();
+                    },
                 };
 
                 sess_build = sess_build
@@ -374,114 +419,147 @@ fn create_session(info: &mut GGRSSessionInfo) -> Result<*mut GGRSSession, Error>
 
                 let sock = match UdpNonBlockingSocket::bind_to_port(info.local_port) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: format!("Error Couldnt bind to port: {}", info.local_port)}),
+                    Err(_) => {
+                            *err = GGRSErrorType::GGRSSocketBindToPort;
+                            return ptr::null_mut();
+                    },
+                    
                 };
-
-                session = GGRSSession::Peer2Peer(match sess_build.start_p2p_session(sock) {
-                    Ok(it) => it,
-                    Err(err) => return Err(Error{msg: err.to_string()}),
-                });
+                unsafe{
+                    *session = GGRSSession::Peer2Peer(match sess_build.start_p2p_session(sock) {
+                        Ok(it) => it,
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSSessionCreation;
+                            return ptr::null_mut();
+                        },
+                    });
+                }
             },
             GGRSSessionType::Spectator => {
                 sess_build = match sess_build.with_max_frames_behind(info.max_frames_behind as usize) {
                     Ok(it) => it,
-                    Err(err) => return Err(Error{msg: err.to_string()}),
+                    Err(_) => {
+                        *err = GGRSErrorType::GGRSSessionCreation;
+                        return ptr::null_mut();
+                    },
                 };
 
                 sess_build = match sess_build.with_catchup_speed(info.catchup_speed as usize) {
                     Ok(it) => it,
-                    Err(err) => return Err(Error{msg: err.to_string()}),
+                    Err(_) => {
+                        *err = GGRSErrorType::GGRSSessionCreation;
+                        return ptr::null_mut();
+                    },
                 };
 
                 let sock = match UdpNonBlockingSocket::bind_to_port(info.local_port) {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: format!("Error Couldnt bind to port: {}", info.local_port)}),
+                    Err(_) => {
+                            *err = GGRSErrorType::GGRSSocketBindToPort;
+                            return ptr::null_mut();
+                    },
                 };
 
                 let host_addr: SocketAddr = match info.host.parse() {
                     Ok(it) => it,
-                    Err(_) => return Err(Error{msg: "Error parsing host player address".to_string()}),
+                    Err(_) => {
+                            *err = GGRSErrorType::GGRSSocketParse;
+                            return ptr::null_mut();
+                    },
                 };
-
-                session = GGRSSession::Spectator(sess_build.start_spectator_session(host_addr, sock));
+                unsafe{
+                    *session = GGRSSession::Spectator(sess_build.start_spectator_session(host_addr, sock));
+                }
             },
             GGRSSessionType::Synctest => {
                 sess_build = sess_build
                     .with_check_distance(info.check_distance as usize)
                     .with_input_delay(info.input_delay as usize);
 
-                session = GGRSSession::Synctest(match sess_build.start_synctest_session() {
-                    Ok(it) => it,
-                    Err(err) => return Err(Error{msg: err.to_string()}),
-                });
+                unsafe{    
+                    *session = GGRSSession::Synctest(match sess_build.start_synctest_session() {
+                        Ok(it) => it,
+                        Err(_) => {
+                            *err = GGRSErrorType::GGRSSessionCreation;
+                            return ptr::null_mut();
+                        },
+                    });
+                }
             },
-            _ => return Err(Error{msg: "Error unsupported session type".to_string()})
+            _ => {
+                *err = GGRSErrorType::GGRSInvalidSessionType;
+                return ptr::null_mut();
+            }
         }
         info.session_started = true;
+        *err = GGRSErrorType::GGRSOk;
         // return the created session
-        return Ok(Box::into_raw(Box::new(session)));
+        return session;
     }
-    Err(Error{msg: "Error session already started or session type not set".to_string()})
+    *err = GGRSErrorType::GGRSSessionStarted;
+    return ptr::null_mut();
 }
 
-#[allow(unused_assignments)]
-fn poll_remote_clients(mut session: *mut GGRSSession) -> bool{
-    let mut sess = unsafe { Box::from_raw(session)};
-    match sess.as_mut() {
-        GGRSSession::NotSet => (),
-        GGRSSession::Peer2Peer( sess) => {sess.poll_remote_clients()},
-        GGRSSession::Spectator( sess) => {sess.poll_remote_clients()},
-        GGRSSession::Synctest(_) => (),
+fn poll_remote_clients(session: *mut GGRSSession) -> GGRSErrorType{
+    unsafe{
+        match session.as_mut() {
+            Some(sess) => match sess{
+                GGRSSession::NotSet => (),
+                GGRSSession::Peer2Peer( sess) => {sess.poll_remote_clients()},
+                GGRSSession::Spectator( sess) => {sess.poll_remote_clients()},
+                GGRSSession::Synctest(_) => (),
+            },
+            None => return GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-    session = Box::into_raw(sess);
-    return true;
+    return GGRSErrorType::GGRSOk;
 }
 
-#[allow(unused_assignments)]
-fn add_local_input(mut session: *mut GGRSSession, player_handle: u32, input: u32) -> Result<bool, Error>{
-    let mut sess = unsafe { Box::from_raw(session)};
+fn add_local_input(session: *mut GGRSSession, player_handle: u32, input: u32) -> GGRSErrorType{
     let mut has_failed = false;
-
-    match sess.as_mut(){
-        GGRSSession::NotSet => (),
-        GGRSSession::Peer2Peer(sess) => { 
-            if sess.add_local_input(player_handle as usize, input).is_err(){
-                has_failed = true;
-            }
-        },
-        GGRSSession::Spectator(_) => (),
-        GGRSSession::Synctest(sess) => {
-            if sess.add_local_input(player_handle as usize, input).is_err(){
-                has_failed = true;
-            }
-        },
+    unsafe{
+        match session.as_mut(){
+            Some(sess) => match sess{
+                GGRSSession::NotSet => (),
+                GGRSSession::Peer2Peer(sess) => { 
+                    if sess.add_local_input(player_handle as usize, input).is_err(){
+                        has_failed = true;
+                    }
+                },
+                GGRSSession::Spectator(_) => (),
+                GGRSSession::Synctest(sess) => {
+                    if sess.add_local_input(player_handle as usize, input).is_err(){
+                        has_failed = true;
+                    }
+                },
+            },
+            None => return GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-
-    session = Box::into_raw(sess);
-
     if has_failed {
-        return Err(Error{msg: "Error player is not a local player".to_string()})
+        return GGRSErrorType::GGRSNotLocalPlayer;
     }
-    Ok(true)
+    return GGRSErrorType::GGRSOk;
 }
 
-#[allow(unused_assignments)]
-fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState {
-    let mut sess = unsafe { Box::from_raw(session)};
+fn get_current_state(session: *mut GGRSSession, err: &mut GGRSErrorType) -> GGRSSessionState {
     let mut state = SessionState::Synchronizing;
-
-    match sess.as_mut() {
-        GGRSSession::NotSet => (),
-        GGRSSession::Peer2Peer(sess) => {
-           state = sess.current_state();
-        },
-        GGRSSession::Spectator(sess) => {
-           state = sess.current_state();
-        },
-        GGRSSession::Synctest(_) => ()
+    *err = GGRSErrorType::GGRSOk;
+    unsafe{
+        match session.as_mut() {
+            Some(sess) => match sess{
+                GGRSSession::NotSet => (),
+                GGRSSession::Peer2Peer(sess) => {
+                    state = sess.current_state();
+                },
+                GGRSSession::Spectator(sess) => {
+                    state = sess.current_state();
+                },
+                GGRSSession::Synctest(_) => (),
+            },
+            None => *err = GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-
-    session = Box::into_raw(sess);
     let ggrs_state: GGRSSessionState;
 
     match state {
@@ -492,25 +570,28 @@ fn get_current_state(mut session: *mut GGRSSession) -> GGRSSessionState {
     return ggrs_state;
 }
 
-#[allow(unused_assignments)]
-fn get_events(mut session: *mut GGRSSession) -> Vec<wrapper::GGRSEvent>{
-    let mut sess = unsafe { Box::from_raw(session)};
+fn get_events(session: *mut GGRSSession, err: &mut GGRSErrorType) -> Vec<wrapper::GGRSEvent>{
+    *err = GGRSErrorType::GGRSOk;
     let mut ggrs_events = Vec::new();
-    match sess.as_mut() {
-        GGRSSession::NotSet => (),
-        GGRSSession::Peer2Peer(sess) => {
-            for ev in sess.events(){
-                ggrs_events.push(ev);
-            } 
-        },
-        GGRSSession::Spectator(sess) => {
-            for ev in sess.events(){
-                ggrs_events.push(ev);
-            } 
-        },
-        GGRSSession::Synctest(_) => (),
+    unsafe{
+        match session.as_mut() {
+            Some(sess) => match sess{
+                GGRSSession::NotSet => (),
+                GGRSSession::Peer2Peer(sess) => {
+                    for ev in sess.events(){
+                        ggrs_events.push(ev);
+                    } 
+                },
+                GGRSSession::Spectator(sess) => {
+                    for ev in sess.events(){
+                        ggrs_events.push(ev);
+                    } 
+                },
+                GGRSSession::Synctest(_) => (),
+            },
+            None => *err = GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-    session = Box::into_raw(sess);
     let mut result = Vec::new();
         for event in ggrs_events{
             let mut ev = wrapper::GGRSEvent::default();
@@ -548,42 +629,45 @@ fn get_events(mut session: *mut GGRSSession) -> Vec<wrapper::GGRSEvent>{
     return result;
 }
 
-#[allow(unused_assignments)]
-fn advance_frame(mut session: *mut GGRSSession) -> Result<GGRSFrameResult, Error>{
-    let mut sess = unsafe { Box::from_raw(session)};
+fn advance_frame(session: *mut GGRSSession, err: &mut GGRSErrorType) -> GGRSFrameResult{
     let mut result = GGRSFrameResult::default();
-    match sess.as_mut(){
-        GGRSSession::NotSet => (),
-        GGRSSession::Peer2Peer(sess) => {
-            match sess.advance_frame(){
-                Ok(reqs) => {
-                    handle_requests(reqs, &mut result);
+    *err = GGRSErrorType::GGRSOk;
+    unsafe{
+        match session.as_mut(){
+            Some(sess) => match sess{
+                GGRSSession::NotSet => (),
+                GGRSSession::Peer2Peer(sess) => {
+                    match sess.advance_frame(){
+                        Ok(reqs) => {
+                            handle_requests(reqs, &mut result);
+                        },
+                        Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                        Err(_) => *err = GGRSErrorType::GGRSAdvanceFrame 
+                    }
                 },
-                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
-                Err(err) => return Err(Error{msg: err.to_string()})
-            }
-        },
-        GGRSSession::Spectator(sess) => {
-            match sess.advance_frame(){
-                Ok(reqs) => {
-                    handle_requests(reqs, &mut result);
+                GGRSSession::Spectator(sess) => {
+                    match sess.advance_frame(){
+                        Ok(reqs) => {
+                            handle_requests(reqs, &mut result);
+                        },
+                        Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                        Err(_) => *err = GGRSErrorType::GGRSAdvanceFrame 
+                    }
                 },
-                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
-                Err(err) => return Err(Error{msg: err.to_string()})
-            }
-        },
-        GGRSSession::Synctest(sess) => {
-            match sess.advance_frame(){
-                Ok(reqs) => {
-                    handle_requests(reqs, &mut result);
+                GGRSSession::Synctest(sess) => {
+                    match sess.advance_frame(){
+                        Ok(reqs) => {
+                            handle_requests(reqs, &mut result);
+                        },
+                        Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
+                        Err(_) => *err = GGRSErrorType::GGRSAdvanceFrame 
+                    }
                 },
-                Err(ggrs::GGRSError::PredictionThreshold) => result.skip_frame = true,
-                Err(err) => return Err(Error{msg: err.to_string()})
-            }
-        },
+            },
+            None => *err = GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-    session = Box::into_raw(sess);
-    Ok(result)
+    return result;
 }
 
 fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameResult){
@@ -619,34 +703,25 @@ fn handle_requests(reqs: Vec<GGRSRequest<GGRSConfig>>, result: &mut GGRSFrameRes
     }
 }
 
-#[allow(unused_assignments)]
-fn get_frames_ahead(mut session: *mut GGRSSession) -> i32{
-    let mut sess = unsafe { Box::from_raw(session)};
+
+fn get_frames_ahead(session: *mut GGRSSession, err: &mut GGRSErrorType) -> i32{
     let mut ahead = 0;
-    match sess.as_mut() {
-        GGRSSession::NotSet | GGRSSession::Spectator(_) | GGRSSession::Synctest(_) => (),
-        GGRSSession::Peer2Peer(sess) => ahead = sess.frames_ahead(),
+    *err = GGRSErrorType::GGRSOk;
+    unsafe{
+        match session.as_mut(){
+            Some(sess) => match sess{
+                GGRSSession::NotSet | GGRSSession::Spectator(_) | GGRSSession::Synctest(_) => (),
+                GGRSSession::Peer2Peer(sess) => ahead = sess.frames_ahead(),
+            },
+            None => *err = GGRSErrorType::GGRSInvalidSessionPointer,
+        }
     }
-    session = Box::into_raw(sess);
     return ahead;
 }
 
-#[allow(unused_assignments)]
- fn clean_session(session: *mut GGRSSession) -> bool{
-    unsafe{drop(Box::from_raw(session))};
-    return true;
-}
-
-
-#[derive(Debug)]
-struct Error{
-    msg: String
-}
-
-impl std::error::Error for Error {}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(format!("INTERNAL RUST ERROR! msg: {}", self.msg).as_str())
+fn clean_session(session: *mut GGRSSession) -> bool{
+    unsafe{
+        libc::free(session.cast());
     }
+    return true;
 }

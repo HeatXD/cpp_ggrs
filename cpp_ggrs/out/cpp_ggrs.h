@@ -4,6 +4,7 @@
 namespace GGRS {
   struct GGRSSessionInfo;
   struct GGRSPlayer;
+  enum class GGRSErrorType : ::std::uint8_t;
   enum class GGRSPlayerType : ::std::uint8_t;
   enum class GGRSSessionType : ::std::uint8_t;
   enum class GGRSSessionState : ::std::uint8_t;
@@ -51,6 +52,26 @@ struct GGRSPlayer final {
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_GGRS$GGRSPlayer
+
+#ifndef CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
+#define CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
+enum class GGRSErrorType : ::std::uint8_t {
+  GGRSOk = 0,
+  GGRSAddLocalPlayer = 1,
+  GGRSSocketParse = 2,
+  GGRSAddRemotePlayer = 3,
+  GGRSAddSpectator = 4,
+  GGRSPlayerTypeNotFound = 5,
+  GGRSFailedSessionAlloc = 6,
+  GGRSSessionCreation = 7,
+  GGRSSocketBindToPort = 8,
+  GGRSInvalidSessionType = 9,
+  GGRSSessionStarted = 10,
+  GGRSInvalidSessionPointer = 11,
+  GGRSNotLocalPlayer = 12,
+  GGRSAdvanceFrame = 13,
+};
+#endif // CXXBRIDGE1_ENUM_GGRS$GGRSErrorType
 
 #ifndef CXXBRIDGE1_ENUM_GGRS$GGRSPlayerType
 #define CXXBRIDGE1_ENUM_GGRS$GGRSPlayerType
@@ -201,19 +222,19 @@ bool set_num_players(::GGRS::GGRSSessionInfo &info, ::std::uint32_t num) noexcep
 
 bool set_sparse_saving(::GGRS::GGRSSessionInfo &info, bool enable) noexcept;
 
-::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info);
+::GGRS::GGRSSession *create_session(::GGRS::GGRSSessionInfo &info, ::GGRS::GGRSErrorType &err) noexcept;
 
-bool poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
+::GGRS::GGRSErrorType poll_remote_clients(::GGRS::GGRSSession *session) noexcept;
 
-bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input);
+::GGRS::GGRSErrorType add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle, ::std::uint32_t input) noexcept;
 
-::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session) noexcept;
+::GGRS::GGRSSessionState get_current_state(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
-::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session) noexcept;
+::rust::Vec<::GGRS::GGRSEvent> get_events(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
-::GGRS::GGRSFrameResult advance_frame(::GGRS::GGRSSession *session);
+::GGRS::GGRSFrameResult advance_frame(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
-::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session) noexcept;
+::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session, ::GGRS::GGRSErrorType &err) noexcept;
 
 bool clean_session(::GGRS::GGRSSession *session) noexcept;
 } // namespace GGRS

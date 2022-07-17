@@ -53,7 +53,10 @@ int main(int argc, char **argv) {
   }
   // add spectators (optional)
   // creating the session pointer
-  auto sess = GGRS::create_session(info);
+  auto err = GGRS::GGRSErrorType::GGRSOk;
+  std::cout << "Err: " << (uint16_t)err << std::endl;
+  auto sess = GGRS::create_session(info, err);
+  std::cout << "Err: " << (uint16_t)err << std::endl;
   // setup raylib
   InitWindow(600, 600, "GGRS C++ GAME");
   SetTargetFPS(60);
@@ -62,9 +65,11 @@ int main(int argc, char **argv) {
   //
   while (!WindowShouldClose()) {
     // poll other peers
-    GGRS::poll_remote_clients(sess);
+    err = GGRS::poll_remote_clients(sess);
+    std::cout << "Err: " << (uint16_t)err << std::endl;
     // handle events
-    auto events = GGRS::get_events(sess);
+    auto events = GGRS::get_events(sess, err);
+    std::cout << "Err: " << (uint16_t)err << std::endl;
     for (int i = 0; i < events.size(); i++) {
       PrintEvent(events[i], frames_to_skip);
     }
@@ -73,11 +78,14 @@ int main(int argc, char **argv) {
       frames_to_skip -= 1;
       std::cout << "Frame: " << game.frame << " skipped: WaitRecommendation" << std::endl;
     }
-    else if (GGRS::get_current_state(sess) == GGRS::GGRSSessionState::Running) {
+    else if (GGRS::get_current_state(sess, err) == GGRS::GGRSSessionState::Running) {
+      std::cout << "Err: " << (uint16_t)err << std::endl;
       // add local input
-      GGRS::add_local_input(sess, local_player, FetchLocalInput());
+      err = GGRS::add_local_input(sess, local_player, FetchLocalInput());
+      std::cout << "Err: " << (uint16_t)err << std::endl;
       // advance frame
-      auto result = GGRS::advance_frame(sess);
+      auto result = GGRS::advance_frame(sess, err);
+      std::cout << "Err: " << (uint16_t)err << std::endl;
       // handle update
       if (!result.skip_frame) {
         HandleRequests(game, save, result.actions);
@@ -88,8 +96,7 @@ int main(int argc, char **argv) {
     // render game
     DrawGameState(game);
   }
-  std::cout << "Session Clean: " << GGRS::clean_session(sess) << std::endl;
-  std::cout << "Session Clean: " << sess << std::endl;
+  GGRS::clean_session(sess);
   return 0;
 }
 

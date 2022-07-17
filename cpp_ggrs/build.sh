@@ -1,8 +1,8 @@
-# build dll
-cargo build
+# build 
+cargo build --release
 # copy dll to example
-cp -fr target/debug/cpp_ggrs.dll example/lib
-cp -fr target/debug/cpp_ggrs.dll example/build
+cp -fr target/release/cpp_ggrs.dll example/lib
+cp -fr target/release/cpp_ggrs.dll example/build
 # install cxx builder if needed
 cargo install cxxbridge-cmd
 # build files

@@ -166,6 +166,10 @@ mod wrapper {
             mut session: *mut GGRSSession,
             player_handle: u32,
         ) -> Result<GGRSNetworkStats>;
+        unsafe fn disconnect_player(
+            mut session: *mut GGRSSession,
+            player_handle: u32,
+        ) -> Result<bool>;
     }
 }
 
@@ -806,7 +810,7 @@ fn network_stats(
                     session = Box::into_raw(sess);
                     return Err(Error {
                         msg: err.to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -818,20 +822,53 @@ fn network_stats(
                     session = Box::into_raw(sess);
                     return Err(Error {
                         msg: err.to_string(),
-                    })
+                    });
                 }
             }
         }
-        GGRSSession::NotSet | GGRSSession::Synctest(_) => (),
+        GGRSSession::NotSet | GGRSSession::Synctest(_) => {
+            session = Box::into_raw(sess);
+            return Err(Error {
+                msg: "Unsupported Operation For This Sessoin Type".to_string(),
+            });
+        }
     }
     session = Box::into_raw(sess);
-    return Ok(GGRSNetworkStats::new(
+    Ok(GGRSNetworkStats::new(
         net_stats.send_queue_len as u32,
         net_stats.ping as u64,
         net_stats.kbps_sent as u64,
         net_stats.local_frames_behind,
         net_stats.remote_frames_behind,
-    ));
+    ))
+}
+
+#[allow(unused_assignments)]
+fn disconnect_player(mut session: *mut GGRSSession, player_handle: u32) -> Result<bool, Error> {
+    let mut sess = unsafe { Box::from_raw(session) };
+    match sess.as_mut() {
+        GGRSSession::NotSet | GGRSSession::Spectator(_) | GGRSSession::Synctest(_) => {
+            session = Box::into_raw(sess);
+            return Err(Error {
+                msg: "Unsupported Operation For This Sessoin Type".to_string(),
+            });
+        }
+        GGRSSession::Peer2Peer(sess_mut) => {
+            let dc = sess_mut.disconnect_player(player_handle as usize);
+            match dc {
+                Ok(_) => {
+                    session = Box::into_raw(sess);
+                    return Ok(true);
+                }
+                Err(err) => {
+                    session = Box::into_raw(sess);
+                    return Err(Error {
+                        msg: err.to_string(),
+                    });
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

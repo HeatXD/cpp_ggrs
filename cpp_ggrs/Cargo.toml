@@ -1,13 +1,13 @@
 [package]
 name = "cpp_ggrs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cxx = "1.0.69"
-ggrs ="0.9.1"
+cxx = "1.0.82"
+ggrs ="0.9.2"
 
 [lib]
 name = "cpp_ggrs"

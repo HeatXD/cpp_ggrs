@@ -16,6 +16,7 @@ namespace GGRS {
   struct GGRSFrameActionInfo;
   struct GGRSInput;
   enum class GGRSInputStatus : ::std::uint8_t;
+  struct GGRSNetworkStats;
   struct GGRSSession;
 }
 
@@ -173,6 +174,19 @@ enum class GGRSInputStatus : ::std::uint8_t {
 };
 #endif // CXXBRIDGE1_ENUM_GGRS$GGRSInputStatus
 
+#ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSNetworkStats
+#define CXXBRIDGE1_STRUCT_GGRS$GGRSNetworkStats
+struct GGRSNetworkStats final {
+  ::std::uint32_t send_queue_len;
+  ::std::uint64_t ping;
+  ::std::uint64_t kbps_sent;
+  ::std::int32_t local_frames_behind;
+  ::std::int32_t remote_frames_behind;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_GGRS$GGRSNetworkStats
+
 #ifndef CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 #define CXXBRIDGE1_STRUCT_GGRS$GGRSSession
 struct GGRSSession final : public ::rust::Opaque {
@@ -216,4 +230,8 @@ bool add_local_input(::GGRS::GGRSSession *session, ::std::uint32_t player_handle
 ::std::int32_t get_frames_ahead(::GGRS::GGRSSession *session) noexcept;
 
 bool clean_session(::GGRS::GGRSSession *session) noexcept;
+
+::GGRS::GGRSNetworkStats network_stats(::GGRS::GGRSSession *session, ::std::uint32_t player_handle);
+
+bool disconnect_player(::GGRS::GGRSSession *session, ::std::uint32_t player_handle);
 } // namespace GGRS
